@@ -1,0 +1,653 @@
+/* Colours follow the game's own CSS variables, with fallbacks for pages without them. */
+
+/* ---- Intel card (floating panel) ---- */
+.rqum-card { color: var(--color-text, #e8e8e8); font: 12px/1.4 system-ui, sans-serif; }
+.rqum-card__title { font-weight: 700; }
+.rqum-card__head { color: var(--color-gold, #d4af37); font-size: 11px; margin-bottom: 6px; }
+.rqum-card__row { display: grid; grid-template-columns: 1fr auto 3.2em; gap: 10px; align-items: baseline; }
+.rqum-card__label { color: var(--color-text-muted, #9a9aa0); text-transform: capitalize; }
+.rqum-card__value { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.rqum-card__age { color: var(--color-text-muted, #9a9aa0); font-size: 10px; text-align: right; }
+/* Combat stats: the game's own colours (app.css .text-offense, .text-spyoff...). */
+.rqum-card__icon { width: 1.25em; height: 1.25em; margin-right: 0.35em; vertical-align: -0.3em; }
+.rqum-card__row--offense { --rqum-stat: #ef4444; }
+.rqum-card__row--defense { --rqum-stat: #3b82f6; }
+.rqum-card__row--spy-offense { --rqum-stat: var(--color-spy-off, #f59e0b); }
+.rqum-card__row--spy-defense { --rqum-stat: var(--color-spy-def, #a855f7); }
+.rqum-card__row[class*="--"] .rqum-card__label,
+.rqum-card__row[class*="--"] .rqum-card__value { color: var(--rqum-stat); }
+.rqum-card__empty { color: var(--color-text-muted, #888); font-style: italic; }
+/* A tap (or click) on a stat shows where it comes from: touch screens have no hover. */
+.rqum-card__row[role="button"] { cursor: pointer; border-radius: 3px; }
+.rqum-card__row[role="button"]:hover, .rqum-card__row[aria-expanded="true"] { background: rgba(255, 255, 255, 0.05); }
+.rqum-card__row[role="button"]:focus-visible { outline: 1px solid var(--color-gold, #d4af37); }
+.rqum-card__row[role="button"] .rqum-card__age { text-decoration: underline dotted; text-underline-offset: 2px; }
+/* Age of a stat: under 6 h, 6 to 12 h, over 12 h (RQUM.ageClass). */
+.rqum-card__age.rqum-age--fresh { color: #22c55e; }
+.rqum-card__age.rqum-age--aging { color: #f59e0b; }
+.rqum-card__age.rqum-age--old { color: #ef4444; }
+.rqum-card__age[class*="rqum-age--"] { font-weight: 600; }
+.rqum-card__detail { margin: 0 0 4px; padding: 2px 6px; border-left: 2px solid var(--color-gold, #d4af37); color: var(--color-text-muted, #9a9aa0); font-size: 11px; }
+.rqum-card__detail[hidden] { display: none; }
+/* Stats with a graph: a small chart mark after the age. */
+.rqum-card__row--graph .rqum-card__age::after { content: " ↗"; font-weight: 400; opacity: 0.7; }
+
+/* ---- Graphs (common.js historyChart), styled like the game's Daily Summary ---- */
+.rqum-chart-panel { margin: 4px 0 2px; }
+.rqum-chart__periods { display: flex; gap: 4px; margin-bottom: 4px; }
+.rqum-chart__periods button {
+  padding: 1px 7px;
+  border: 1px solid var(--color-border, #3a3a40);
+  border-radius: 10px;
+  background: none;
+  color: var(--color-text-muted, #9a9aa0);
+  font: 600 10px system-ui, sans-serif;
+  cursor: pointer;
+}
+.rqum-chart__periods button.is-active { border-color: var(--rqum-stat, var(--color-gold, #d4af37)); color: var(--rqum-stat, var(--color-gold, #d4af37)); }
+.rqum-chart__svg { display: block; width: 100%; height: auto; touch-action: pan-y; cursor: crosshair; }
+.rqum-chart__axis { stroke: var(--color-border-light, #4a4a52); stroke-width: 1; }
+.rqum-chart__area { fill: color-mix(in srgb, var(--rqum-stat, var(--color-gold, #d4af37)) 15%, transparent); }
+.rqum-chart__line { fill: none; stroke: var(--rqum-stat, var(--color-gold, #d4af37)); stroke-width: 2; stroke-linejoin: round; }
+.rqum-chart__dot { fill: var(--rqum-stat, var(--color-gold, #d4af37)); }
+.rqum-chart__cursor { fill: var(--rqum-stat, var(--color-gold, #d4af37)); stroke: var(--color-bg-card, #1b1b1f); stroke-width: 1.5; }
+.rqum-chart__labels { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--color-text-muted, #9a9aa0); }
+.rqum-chart__readout { min-height: 1.3em; font-size: 10px; color: var(--color-text-muted, #9a9aa0); }
+.rqum-chart__plot { position: relative; }
+/* Bubble next to the hovered point (to its right, or its left near the right edge). */
+.rqum-chart__tip {
+  position: absolute;
+  z-index: 1;
+  transform: translate(10px, -50%);
+  padding: 3px 7px;
+  border: 1px solid var(--rqum-stat, var(--color-gold, #d4af37));
+  border-radius: 5px;
+  background: var(--color-bg-card, #1b1b1f);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.rqum-chart__tip.is-left { transform: translate(calc(-100% - 10px), -50%); }
+.rqum-chart__tip[hidden] { display: none; }
+.rqum-chart__tip-date { color: var(--color-text-muted, #9a9aa0); }
+.rqum-chart__tip-value { color: var(--rqum-stat, var(--color-text, #e8e8e8)); font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---- Header icon ---- */
+.rqum-header-btn { background: none; border: 0; padding: 0; cursor: pointer; }
+.rqum-header-img { height: 25px; width: auto; display: block; transition: filter 0.15s; }
+.rqum-header-btn:hover .rqum-header-img { filter: brightness(1.25); }
+.rqum-header-btn.is-open .rqum-header-img { filter: brightness(1.25) drop-shadow(0 0 4px rgba(220, 40, 40, 0.7)); }
+
+/* ---- Eye button after player names (buttons.js) ---- */
+.rqum-eye-btn {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  position: relative; /* buttons.js nudges `top` to centre it on the player's name */
+  flex: none; /* in flex cells (Enhancer's lists) a long name gets the "…", never the eye */
+  margin: 0 0 0 6px;
+  padding: 2px 3px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s, background 0.15s, filter 0.15s;
+}
+.rqum-eye-btn:hover, .rqum-eye-btn:focus-visible {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  filter: brightness(1.3) drop-shadow(0 0 3px rgba(220, 40, 40, 0.6));
+}
+.rqum-eye-btn img { height: 16px; width: auto; display: block; }
+/* Fingers need a bigger target than a mouse. */
+@media (pointer: coarse) {
+  .rqum-eye-btn { padding: 6px; margin-left: 2px; }
+  .rqum-eye-btn img { height: 18px; }
+}
+
+/* ---- Accent colour (⚙ Settings, common.js applyAccent): RQUM's own elements only, never
+   the game's (which also uses --color-gold). */
+.rqum-panel, .rqum-big, .rqum-filters, .rqum-lb, .rqum-toast, .rqum-card, .rqum-ffa-pastille {
+  --color-gold: var(--rqum-accent, #d4af37);
+}
+.rqum-ffa-pastille { background: var(--rqum-accent, #f59e0b) !important; }
+
+/* ---- Attack buttons: my offense beats the target's known defense (attack-colors.js) ---- */
+.rqum-atk-win,
+.rqum-atk-win.btn-danger {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+}
+.rqum-atk-win:hover:not(:disabled) { background: #15803d !important; border-color: #15803d !important; }
+/* Maybe: their defense is only known as a minimum after a failed attack, and I am above it. */
+.rqum-atk-maybe,
+.rqum-atk-maybe.btn-danger {
+  background: #d97706 !important;
+  border-color: #d97706 !important;
+  color: #fff !important;
+}
+.rqum-atk-maybe:hover:not(:disabled) { background: #b45309 !important; border-color: #b45309 !important; }
+.rqum-atk-age.rqum-atk-age--maybe { color: #f59e0b; }
+
+/* ---- Floating panel ---- */
+.rqum-panel {
+  position: fixed;
+  z-index: 2147483646;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border, #3a3a40);
+  border-radius: 8px;
+  background: var(--color-bg-card, #1b1b1f);
+  color: var(--color-text, #e8e8e8);
+  font: 13px/1.4 system-ui, sans-serif;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.65);
+}
+.rqum-panel[hidden] { display: none; }
+.rqum-panel__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border, #3a3a40);
+  cursor: move;
+  user-select: none;
+  touch-action: none; /* lets a finger drag the window instead of scrolling the page */
+}
+.rqum-panel__title { flex: 1; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-gold, #d4af37); font-weight: 700; }
+.rqum-panel__version { margin-left: 8px; letter-spacing: 0.04em; text-transform: none; font-weight: 600; color: var(--color-text-muted, #9a9aa0); }
+.rqum-panel__close { background: none; border: 0; color: var(--color-text-muted, #9a9aa0); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.rqum-panel__close:hover { color: var(--color-danger, #ef5350); }
+.rqum-panel__tabs { display: flex; border-bottom: 1px solid var(--color-border, #3a3a40); }
+.rqum-panel__tab {
+  flex: 1 1 auto; /* 8 tabs with Admin: each as wide as its word, the rest shared */
+  padding: 7px 2px;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted, #9a9aa0);
+  font: 600 12px system-ui, sans-serif;
+  cursor: pointer;
+}
+.rqum-panel__tab.is-active { color: var(--color-text, #e8e8e8); border-bottom-color: var(--color-gold, #d4af37); }
+.rqum-panel__body { padding: 10px; overflow-y: auto; }
+.rqum-panel__status { padding: 6px 10px; border-top: 1px solid var(--color-border, #3a3a40); font-size: 11px; color: var(--color-text-muted, #9a9aa0); }
+.rqum-panel__status.is-error { color: var(--color-danger, #ef5350); }
+
+.rqum-panel input[type="search"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-border, #3a3a40);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+}
+.rqum-btn {
+  width: 100%;
+  padding: 6px 10px;
+  margin-top: 8px;
+  border: 1px solid var(--color-gold, #d4af37);
+  border-radius: 4px;
+  background: none;
+  color: var(--color-gold, #d4af37);
+  font: 600 12px system-ui, sans-serif;
+  cursor: pointer;
+}
+.rqum-btn:hover { background: color-mix(in srgb, var(--color-gold, #d4af37) 12%, transparent); }
+.rqum-muted { color: var(--color-text-muted, #9a9aa0); font-style: italic; margin: 4px 0; }
+
+.rqum-list { list-style: none; margin: 0; padding: 0; }
+.rqum-list__item { border-bottom: 1px solid var(--color-border, #3a3a40); }
+.rqum-list__row { display: flex; align-items: center; gap: 8px; padding: 6px 2px; cursor: pointer; }
+.rqum-list__row:hover { background: rgba(255, 255, 255, 0.04); }
+.rqum-list__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+/* Favourite star in player rows (common.js favStar). */
+.rqum-fav { flex: none; margin: 0 6px 0 0; padding: 0 2px; border: 0; background: none; color: #6b6b75; font-size: 15px; line-height: 1; cursor: pointer; }
+.rqum-fav.is-on { color: var(--color-gold, #d4af37); }
+.rqum-fav:hover { color: #f0d060; }
+/* Clan search result: the clan's players, indented under it. */
+.rqum-clan-result > .rqum-list { margin-left: 10px; }
+/* Recent tab: a second line of chips, one per figure that changed (common.js changeChips). */
+.rqum-list__row:has(.rqum-chips) { flex-wrap: wrap; row-gap: 3px; }
+.rqum-chips { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 10px; padding-left: 26px; font-size: 11px; }
+.rqum-chip { color: var(--rqum-stat); white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rqum-chip__icon { width: 12px; height: 12px; margin-right: 3px; vertical-align: -2px; }
+.rqum-chip__diff { margin-left: 4px; font-weight: 600; }
+.rqum-chip__diff.is-up { color: #22c55e; }
+.rqum-chip__diff.is-down { color: #ef4444; }
+.rqum-list__meta { font-size: 11px; color: var(--color-text-muted, #9a9aa0); white-space: nowrap; }
+.rqum-list__detail { padding: 4px 2px 8px; }
+.rqum-admin__version { font-size: 10px; font-weight: 700; color: #22c55e; }
+.rqum-admin__version.is-old { color: #f59e0b; }
+/* Clans tab: the game's own tab names as they are ("Overall (avg)"); change over 24 h. */
+.rqum-card__label--as-is { text-transform: none; }
+.rqum-change { font-size: 10px; font-weight: 600; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--color-text-muted, #9a9aa0); }
+.rqum-change.is-up { color: #22c55e; }
+.rqum-change.is-down { color: #ef4444; }
+.rqum-change.is-spike { color: #1b1b1f; background: #f59e0b; border-radius: 3px; padding: 0 4px; font-weight: 800; }
+.rqum-list__meta .rqum-change { margin-left: 2px; }
+.rqum-list__badge { height: 12px; width: auto; margin-left: 5px; vertical-align: -1px; opacity: 0.8; }
+/* Renamed in the game: "✏️ was Deadly", orange so that it catches the eye. */
+.rqum-renamed { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 3px; background: rgba(249, 115, 22, 0.18);
+  color: #fb923c; font-size: 11px; font-weight: 600; white-space: nowrap; vertical-align: 1px; cursor: help; }
+.rqum-card > .rqum-renamed { margin: 2px 0 4px; }
+.rqum-list__detail a, .rqum-panel__link { color: var(--color-gold, #d4af37); font-size: 11px; }
+.rqum-panel__link { display: inline-block; margin-top: 8px; }
+
+/* ---- Big window (bigview.js): the tabs in a large window in the middle of the screen ---- */
+.rqum-big {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.78);
+  color: var(--color-text, #e8e8e8);
+  font: 13px/1.45 system-ui, sans-serif;
+}
+html.rqum-big-open { overflow: hidden; }
+.rqum-big__box {
+  width: min(1240px, 100%);
+  height: min(92vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #3a3a40);
+  border-radius: 10px;
+  background: var(--color-bg-card, #1b1b1f);
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.7);
+}
+.rqum-big__bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--color-border, #3a3a40); }
+.rqum-big__title { flex: 1; font: 700 17px Cinzel, Georgia, serif; letter-spacing: 0.06em; color: var(--color-gold, #d4af37); }
+.rqum-big__btn { padding: 6px 10px; border: 1px solid var(--color-border, #3a3a40); border-radius: 5px; background: rgba(255, 255, 255, 0.04); color: inherit; font: 600 12px system-ui, sans-serif; cursor: pointer; }
+.rqum-big__btn:hover { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); }
+.rqum-big__btn--close { font-size: 16px; line-height: 1; padding: 4px 10px; }
+.rqum-big__tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--color-border, #3a3a40); }
+.rqum-big__tab { padding: 6px 12px; border: 1px solid var(--color-border, #3a3a40); border-radius: 5px; background: none; color: var(--color-text-muted, #9a9aa0); font: 600 12px system-ui, sans-serif; cursor: pointer; }
+.rqum-big__tab:hover, .rqum-big__tab.is-active { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); }
+.rqum-big__filter { flex: 1; min-width: 180px; margin-left: auto; padding: 7px 10px; border: 1px solid var(--color-border, #3a3a40); border-radius: 5px; background: rgba(255, 255, 255, 0.04); color: inherit; font: inherit; }
+.rqum-big__filter[hidden] { display: none; }
+.rqum-big__content { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; overflow: auto; }
+.rqum-big__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.rqum-big__toolbar .rqum-muted { margin: 0; }
+.rqum-big__btn.is-on { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); background: color-mix(in srgb, var(--color-gold, #d4af37) 12%, transparent); }
+.rqum-big__content > .rqum-muted { margin: 0; }
+.rqum-big__status { padding: 8px 16px; border-top: 1px solid var(--color-border, #3a3a40); font-size: 11px; color: var(--color-text-muted, #9a9aa0); }
+.rqum-big__status:empty { display: none; }
+.rqum-big__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.rqum-big__stat { padding: 10px 12px; border: 1px solid var(--color-border, #3a3a40); border-radius: 7px; background: rgba(255, 255, 255, 0.03); }
+.rqum-big__stat-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted, #9a9aa0); }
+.rqum-big__stat-value { margin-top: 4px; font-size: 19px; font-weight: 700; color: var(--color-gold, #d4af37); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rqum-big__split { flex: 1; min-height: 320px; display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr); gap: 12px; }
+.rqum-big__left, .rqum-big__side { min-height: 0; border: 1px solid var(--color-border, #3a3a40); border-radius: 7px; overflow: auto; }
+/* The table scrolls inside its frame (long lists draw more rows as it scrolls). */
+.rqum-big__left { display: flex; flex-direction: column; overflow: hidden; }
+.rqum-big__table-wrap { flex: 1; min-height: 0; overflow: auto; }
+.rqum-big__side { padding: 12px 14px; }
+.rqum-big__side .rqum-card__title { font-size: 15px; }
+.rqum-big__side .rqum-chart__svg { height: 170px; }
+.rqum-big__side .rqum-list__detail a, .rqum-big__side > a { display: inline-block; margin-top: 8px; color: var(--color-gold, #d4af37); font-size: 12px; }
+.rqum-big__table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rqum-big__table th { position: sticky; top: 0; z-index: 1; padding: 0; background: var(--color-bg-light, #232328); text-align: left; white-space: nowrap; }
+.rqum-big__table th.is-num { text-align: right; }
+.rqum-big__sort { width: 100%; padding: 9px 8px; border: 0; background: none; color: var(--color-gold, #d4af37); font: 700 10.5px system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; text-align: inherit; cursor: pointer; }
+.rqum-big__table th.is-sorted .rqum-big__sort::after { content: ' ' attr(data-dir); }
+.rqum-big__table th.is-sorted .rqum-big__sort { color: var(--color-text, #e8e8e8); }
+.rqum-big__table td { padding: 8px; border-top: 1px solid var(--color-border, #3a3a40); white-space: nowrap; }
+.rqum-big__table td.is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rqum-big__table tbody tr { cursor: pointer; }
+.rqum-big__table tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+.rqum-big__table tbody tr.is-selected { background: color-mix(in srgb, var(--color-gold, #d4af37) 16%, transparent); }
+.rqum-big__name { display: inline-flex; align-items: center; max-width: 220px; }
+.rqum-big__name-text { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.rqum-big__none { color: var(--color-text-muted, #9a9aa0); }
+.rqum-big__clan { flex: none; margin-right: 5px; color: var(--color-text-muted, #9a9aa0); font-weight: 600; }
+/* Recent tab: the figure that changed, with the change under it. */
+.rqum-big__changed { font-weight: 700; }
+.rqum-big__change-cell { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.rqum-big__diff { font-size: 10.5px; font-weight: 600; color: var(--color-text-muted, #9a9aa0); }
+.rqum-big__diff.is-up { color: #22c55e; }
+.rqum-big__diff.is-down { color: #ef4444; }
+/* Column headers of the 4 combat figures: the game's icon and colour. */
+.rqum-big__th-icon { width: 14px; height: 14px; margin-right: 4px; vertical-align: -3px; }
+.rqum-big__table th.rqum-card__row--offense .rqum-big__sort { color: #ef4444; }
+.rqum-big__table th.rqum-card__row--defense .rqum-big__sort { color: #60a5fa; }
+.rqum-big__table th.rqum-card__row--spy-offense .rqum-big__sort { color: #f59e0b; }
+.rqum-big__table th.rqum-card__row--spy-defense .rqum-big__sort { color: #a78bfa; }
+/* Clans tab: a clan's members unfolded under its row. */
+.rqum-big__table tbody tr.is-open { background: color-mix(in srgb, var(--color-gold, #d4af37) 16%, transparent); }
+.rqum-big__table tr.rqum-big__unfolded { cursor: default; background: rgba(255, 255, 255, 0.02); }
+.rqum-big__table tr.rqum-big__unfolded:hover { background: rgba(255, 255, 255, 0.02); }
+.rqum-big__unfolded > td { padding: 6px 12px 10px 28px; white-space: normal; }
+.rqum-big__unfolded .rqum-clan-members { margin-top: 0; max-width: 640px; }
+.rqum-clan-members { margin-top: 12px; }
+/* The 4 combat figures in the game's colours (as on the cards). */
+.rqum-big__table td.rqum-card__row--offense { color: #ef4444; }
+.rqum-big__table td.rqum-card__row--defense { color: #60a5fa; }
+.rqum-big__table td.rqum-card__row--spy-offense { color: #f59e0b; }
+.rqum-big__table td.rqum-card__row--spy-defense { color: #a78bfa; }
+/* ⤢ in the small window's title bar. */
+.rqum-panel__expand { background: none; border: 0; color: var(--color-text-muted, #9a9aa0); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.rqum-panel__expand:hover { color: var(--color-gold, #d4af37); }
+/* The big layout placed in a page (bigview.js mount: the web page's Players tab). */
+.rqum-big--inline { position: static; z-index: auto; display: block; padding: 0; background: none; }
+.rqum-big--inline .rqum-big__box { width: 100%; height: calc(100vh - 150px); min-height: 520px; box-shadow: none; }
+/* Phones: the whole screen, the card under the table. */
+@media (max-width: 760px) {
+  .rqum-big { padding: 0; }
+  .rqum-big__box { width: 100%; height: 100%; border-radius: 0; border: 0; }
+  .rqum-big__bar, .rqum-big__tabs, .rqum-big__content { padding-left: 10px; padding-right: 10px; }
+  .rqum-big__split { display: flex; flex-direction: column; min-height: 0; }
+  .rqum-big__left { max-height: 55vh; flex: none; }
+  .rqum-big__side { overflow: visible; }
+  .rqum-big__filter { min-width: 100%; }
+  .rqum-big__cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* In a page: as tall as its content, the page scrolls. */
+  .rqum-big--inline .rqum-big__box { height: auto; min-height: 0; border: 1px solid var(--color-border, #3a3a40); border-radius: 8px; }
+}
+
+.rqum-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: #2e7d32;
+  color: #fff;
+  font: 600 13px/1.4 system-ui, sans-serif;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.rqum-toast--error { background: #b3261e; }
+
+/* ---- Sign-in, Settings tab, personal keys (panel.js) ---- */
+.rqum-section-title { margin: 12px 0 6px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-gold, #d4af37); }
+.rqum-section-title:first-child { margin-top: 0; }
+.rqum-login, .rqum-keys__form { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.rqum-keys__form { flex-direction: row; }
+.rqum-login input, .rqum-keys__form input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  border: 1px solid var(--color-border, #3a3a40);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  font-size: 16px; /* no zoom on phones */
+}
+.rqum-btn--inline { width: auto; margin-top: 0; }
+.rqum-option { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0; font-size: 12px; cursor: pointer; }
+.rqum-keys__made { font-size: 11px; color: var(--color-gold, #d4af37); word-break: break-all; }
+.rqum-keys__row { flex-wrap: wrap; cursor: default; }
+.rqum-keys__row.is-revoked { opacity: 0.45; }
+.rqum-keys__key { font-size: 10px; padding: 1px 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.06); cursor: copy; }
+.rqum-link-btn { background: none; border: 0; padding: 0; color: var(--color-gold, #d4af37); font-size: 11px; cursor: pointer; text-decoration: underline; }
+.rqum-keys__on { color: #22c55e; font-weight: 600; }
+.rqum-panel__tabs[hidden] { display: none; }
+
+/* Ranking tab: category sub-tabs, a podium for the top three, then the rest. */
+.rqum-ranking__tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.rqum-ranking__tabs button { flex: 1 1 30%; white-space: nowrap; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15); background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.rqum-ranking__tabs button.is-active { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); background: color-mix(in srgb, var(--color-gold, #d4af37) 8%, transparent); }
+.rqum-podium { display: flex; align-items: flex-end; justify-content: center; gap: 6px; margin: 4px 0 14px; }
+.rqum-podium__step { flex: 1; max-width: 110px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.rqum-podium__medal { font-size: 22px; line-height: 1; }
+.rqum-podium__name { font-weight: 700; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rqum-podium__value { font-size: 12px; font-variant-numeric: tabular-nums; opacity: .85; }
+.rqum-podium__block { width: 100%; display: flex; align-items: flex-start; justify-content: center; padding-top: 6px; margin-top: 4px; border-radius: 6px 6px 0 0; font-weight: 800; font-size: 18px; color: rgba(0,0,0,.55); }
+.rqum-podium__step--1 .rqum-podium__block { height: 70px; background: linear-gradient(#f6d365, #d4af37); box-shadow: 0 0 14px rgba(212,175,55,.45); /* always gold: the medal */ }
+.rqum-podium__step--2 .rqum-podium__block { height: 50px; background: linear-gradient(#e5e7eb, #9ca3af); }
+.rqum-podium__step--3 .rqum-podium__block { height: 36px; background: linear-gradient(#e6a06b, #b4693a); }
+.rqum-podium__step--1 .rqum-podium__name { color: #d4af37; }
+.rqum-ranking__list { list-style: none; margin: 0; padding: 0; }
+.rqum-ranking__row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.rqum-ranking__place { width: 22px; text-align: right; opacity: .6; font-variant-numeric: tabular-nums; }
+.rqum-ranking__row .rqum-list__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rqum-ranking__value { font-variant-numeric: tabular-nums; font-weight: 600; }
+/* Change over the last 24 h, next to each value (common.js rankingView). */
+.rqum-ranking__diff { min-width: 44px; text-align: right; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-text-muted, #9a9aa0); }
+.rqum-ranking__diff:empty { min-width: 0; }
+.rqum-ranking__diff.is-up { color: #22c55e; }
+.rqum-ranking__diff.is-down { color: #ef4444; }
+.rqum-podium__step .rqum-ranking__diff { min-width: 0; text-align: center; font-size: 10px; }
+
+/* A cell that cuts with "…" (buttons.js keepVisible): the name itself gets the "…" and
+   leaves room for the eye and a clan tag. The cell's own layout (a table cell) is untouched. */
+.rqum-eye-host > a[href*="/game/player/"] {
+  display: inline-block; max-width: calc(100% - 80px); min-width: 3em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
+}
+
+/* Intel card: the rest of the last spy report, each part folded (common.js reportFolds). */
+.rqum-fold { margin-top: 6px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 4px; }
+.rqum-fold__title { cursor: pointer; display: flex; align-items: center; gap: 6px; color: var(--color-text-muted, #9a9aa0); font-size: 11px; list-style: none; }
+.rqum-fold__title::-webkit-details-marker { display: none; }
+.rqum-fold__title::before { content: '▸'; font-size: 9px; }
+.rqum-fold[open] > .rqum-fold__title::before { content: '▾'; }
+.rqum-fold__title .rqum-card__age { margin-left: auto; }
+.rqum-fold__row { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 1px 0 1px 12px; }
+.rqum-fold__table { width: 100%; min-width: 0 !important; border-collapse: collapse; margin: 4px 0 2px; font-size: 11px; }
+.rqum-fold__table th { text-align: left; font-weight: 500; color: var(--color-text-muted, #9a9aa0); text-transform: capitalize; padding: 1px 4px; }
+.rqum-fold__table td { padding: 1px 4px; border-top: 1px solid rgba(255,255,255,.05); }
+.rqum-fold__table td.is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rqum-fold__table td { white-space: nowrap; }
+/* "> X": the figure is above a failed attack's / spy operation's (common.js withFloors). */
+.rqum-card__value--floor { font-style: italic; text-decoration: underline dotted; }
+/* Age of the defense a green Attack button relies on (attack-colors.js). */
+.rqum-atk-age { display: inline-block; margin-left: 4px; font: 600 10px/1 system-ui, sans-serif; vertical-align: middle; white-space: nowrap; flex: none; color: #9a9aa0; }
+.rqum-atk-age.rqum-age--fresh { color: #22c55e; }
+.rqum-atk-age.rqum-age--aging { color: #f59e0b; }
+.rqum-atk-age.rqum-age--old { color: #ef4444; }
+
+/* FFA tab: my AFK on top, then the members AFK. */
+.rqum-ffa__me { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; margin-bottom: 8px; border: 1px solid color-mix(in srgb, var(--color-gold, #d4af37) 35%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--color-gold, #d4af37) 6%, transparent); }
+.rqum-ffa__state { font-weight: 600; }
+.rqum-ffa__title { margin: 14px 0 2px; font-size: 13px; color: var(--color-gold, #d4af37); }
+.rqum-ffa__hours { background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; padding: 2px 4px; font: inherit; }
+.rqum-ffa__hours option { color: #111; }
+/* Filters above the Attack / Intelligence target lists (attack-colors.js). */
+.rqum-filters { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin: 0 0 6px; font-size: 12px; color: var(--color-text-muted, #9aa0b5); }
+.rqum-filters label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; color: var(--color-text, #e8e8e8); }
+tr[data-rqum-filtered] { display: none !important; }
+.rqum-filters__count { font-weight: 600; color: var(--color-gold, #d4af37); }
+.rqum-filters__mine { color: #9a9aa0; font-size: 0.9em; }
+
+/* ---- Compact Attack list on phones (option "compactAttack", attack-colors.js) ----------
+   Narrow screens only. Each target in 3 short lines instead of the game's tall card:
+     Name 👁                          [Attack] 3h (0/5)
+     [TGO]  Lv 27  Undead                    [10 ▾]
+     💰 2.41M  ⚔ 3,700  ▓▓▓ 89%
+   Columns of #battlelist-table: player, clan, level, race, gold, army, fort, turns, action. */
+@media (max-width: 768px) {
+  .rqum-compact-attack #battlelist-table thead { display: none !important; }
+  .rqum-compact-attack #battlelist-table,
+  .rqum-compact-attack #battlelist-table tbody { display: block !important; width: 100% !important; }
+  .rqum-compact-attack #battlelist-table tbody tr {
+    display: grid !important;
+    grid-template-columns: auto auto auto 1fr;
+    align-items: center;
+    gap: 2px 10px;
+    margin: 0 0 6px !important;
+    padding: 6px 8px !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    border-radius: 8px !important;
+    background: rgba(255,255,255,.02) !important;
+  }
+  .rqum-compact-attack #battlelist-table tbody td {
+    display: block !important;
+    width: auto !important; min-width: 0 !important;
+    padding: 0 !important; margin: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+    font-size: 13px !important;
+    white-space: nowrap;
+  }
+  .rqum-compact-attack #battlelist-table tbody td::before { display: none !important; content: none !important; }
+  .rqum-compact-attack #battlelist-table td:nth-child(1) { grid-column: 1 / 4; grid-row: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+  .rqum-compact-attack #battlelist-table td:nth-child(9) { grid-column: 4; grid-row: 1; justify-self: end; display: flex !important; align-items: center; gap: 4px; }
+  .rqum-compact-attack #battlelist-table td:nth-child(2) { grid-column: 1; grid-row: 2; color: #9aa0b5; }
+  .rqum-compact-attack #battlelist-table td:nth-child(3) { grid-column: 2; grid-row: 2; }
+  .rqum-compact-attack #battlelist-table td:nth-child(3)::before { content: 'Lv ' !important; display: inline !important; color: #9aa0b5; }
+  .rqum-compact-attack #battlelist-table td:nth-child(4) { grid-column: 3; grid-row: 2; color: #9aa0b5; }
+  .rqum-compact-attack #battlelist-table td:nth-child(8) { grid-column: 4; grid-row: 2 / 4; justify-self: end; }
+  .rqum-compact-attack #battlelist-table td:nth-child(5) { grid-column: 1; grid-row: 3; }
+  .rqum-compact-attack #battlelist-table td:nth-child(6) { grid-column: 2; grid-row: 3; }
+  .rqum-compact-attack #battlelist-table td:nth-child(6)::before { content: '⚔ ' !important; display: inline !important; }
+  .rqum-compact-attack #battlelist-table td:nth-child(7) { grid-column: 3; grid-row: 3; width: 70px !important; }
+  .rqum-compact-attack #battlelist-table td:nth-child(7) .fort-bar { width: 70px !important; margin: 0 !important; }
+  .rqum-compact-attack #battlelist-table .attack-btn { padding: 4px 12px !important; font-size: 13px !important; }
+  /* Enhancer's "➕ Add to QA" / "− Remove from QA": its sign only (the full text in its title). */
+  .rqum-compact-attack #battlelist-table .qal-quickadd-btn { width: 26px; overflow: hidden; white-space: nowrap; text-align: left !important; padding: 2px 5px !important; font-size: 12px !important; margin-left: 0 !important; flex: none; }
+  .rqum-compact-attack #battlelist-table .attack-btn { flex: none; white-space: nowrap; }
+  .rqum-compact-attack #battlelist-table td:nth-child(9) { min-width: 0 !important; }
+  /* The last column takes what the Attack button needs; the race / fort column gives way. */
+  .rqum-compact-attack #battlelist-table tbody tr { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .rqum-compact-attack #battlelist-table .attack-limit { font-size: 10px !important; }
+  /* Turns on line 2 only; the fort bar takes line 3 up to the right edge. */
+  .rqum-compact-attack #battlelist-table td:nth-child(8) { grid-row: 2 !important; }
+  .rqum-compact-attack #battlelist-table td:nth-child(7) { grid-column: 3 / 5 !important; width: auto !important; }
+  .rqum-compact-attack #battlelist-table td:nth-child(7) .fort-bar { width: 100% !important; max-width: 160px; }
+  .rqum-compact-attack #battlelist-table .turns-select { padding: 2px 4px !important; font-size: 12px !important; }
+  .rqum-compact-attack #battlelist-table .qal-rank { display: none !important; }
+}
+@media (max-width: 768px) {
+  /* Enhancer's "Add to QA" button: no room for it on a phone line (the Quick Attack list is managed on PC). */
+  .rqum-compact-attack #battlelist-table .qal-quickadd-btn { display: none !important; }
+}
+/* FFA pastille on the header eye: members AFK (panel.js refreshFfaPastille). */
+.rqum-header-btn { position: relative; }
+.rqum-ffa-pastille {
+  position: absolute; top: -2px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 8px; background: #f59e0b; color: #111; font: 700 10px/16px system-ui, sans-serif; text-align: center;
+  pointer-events: none;
+}
+/* Fort alert (panel.js): red pastille at the eye's top left, 🏰 in the title bars. */
+.rqum-fort-pastille {
+  position: absolute; top: -2px; left: -4px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 8px; background: #dc2626; color: #fff; font: 700 10px/16px system-ui, sans-serif; text-align: center;
+}
+.rqum-fort-alert[hidden] { display: none !important; }
+.rqum-fort-alert { animation: rqum-fort-blink 1.6s ease-in-out infinite; }
+@keyframes rqum-fort-blink { 50% { opacity: .45; } }
+.rqum-option.rqum-fort-option { display: block; } /* text and fields on one flowing line */
+.rqum-fort-option__how { margin: 0 2px; padding: 1px 4px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.25); border-radius: 4px; font: inherit; }
+.rqum-fort-option__how option { color: #111; }
+.rqum-fort-option__gold { width: 72px; margin: 0 2px; padding: 1px 4px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.25); border-radius: 4px; font: inherit; }
+.rqum-fort-option__pct { width: 52px; margin: 0 2px; padding: 1px 4px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.25); border-radius: 4px; font: inherit; }
+
+/* Leaderboards tab (common.js leaderboardView). */
+.rqum-lb__search { width: 100%; box-sizing: border-box; margin: 0 0 6px; padding: 5px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,.15); background: transparent; color: inherit; font: inherit; }
+.rqum-lb { max-width: 560px; margin: 0 auto; } /* readable in the big window too */
+/* The game makes every table at least as wide as its content (600px on phones): not this one,
+   or the figures go out of the small window. */
+.rqum-lb__table { width: 100%; min-width: 0 !important; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.rqum-lb__table tr { cursor: pointer; }
+.rqum-lb__table tr:hover { background: rgba(255,255,255,.05); }
+.rqum-lb__table td { padding: 3px 4px; font-size: inherit; border-bottom: 0; border-top: 1px solid rgba(255,255,255,.05); white-space: nowrap; }
+.rqum-lb__rank { width: 3.4em; color: var(--color-text-muted, #9a9aa0); font-variant-numeric: tabular-nums; }
+.rqum-lb__name { overflow: hidden; text-overflow: ellipsis; }
+.rqum-lb__value { width: 6.5em; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rqum-lb__value[class*="--"] { color: var(--rqum-stat); }
+.rqum-lb__table td.rqum-card__age { text-align: right; width: 3em; }
+.rqum-lb__table tr.is-ally .rqum-lb__name { color: var(--color-gold, #d4af37); }
+.rqum-lb__table tr.is-me { background: color-mix(in srgb, var(--color-gold, #d4af37) 12%, transparent); }
+.rqum-lb__more { margin-top: 6px; width: 100%; }
+/* 9 tabs in the small window: a second line when they do not fit. */
+.rqum-panel__tabs { flex-wrap: wrap; }
+.rqum-lb__rank.is-game { color: var(--color-gold, #d4af37); font-weight: 700; }
+.rqum-accent input[type="color"] { width: 32px; height: 22px; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; background: none; cursor: pointer; vertical-align: middle; }
+.rqum-panel__gear.is-active { color: var(--color-gold, #d4af37); }
+.rqum-ffa__gold { width: 70px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; padding: 2px 4px; font: inherit; }
+.rqum-ffa-mark { display: inline-block; vertical-align: middle; position: relative; margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: #f59e0b; color: #111; font: 700 10px/1.4 system-ui, sans-serif; white-space: nowrap; }
+
+/* Officers (Admin tab rank): the badge in the title bar, the FFA tab's "add a member". */
+.rqum-officer-badge { color: var(--color-gold, #d4af37); cursor: default; }
+.rqum-officer-toggle.is-on { color: var(--color-gold, #d4af37); }
+.rqum-ffa__who { width: 110px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; padding: 2px 4px; font: inherit; }
+.rqum-ffa__who option { color: #111; }
+/* Admin tab: the personal keys fold in the small window (panel.js renderKeysSection). */
+.rqum-keys__title { cursor: pointer; list-style: none; }
+.rqum-keys__title::-webkit-details-marker { display: none; }
+.rqum-keys__title::before { content: '▸ '; }
+details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
+/* ⟳ in the title bar: my own stats read now (panel.js). */
+.rqum-panel__refresh.is-busy { animation: rqum-spin 1s linear infinite; color: var(--color-gold, #d4af37); }
+@keyframes rqum-spin { to { transform: rotate(360deg); } }
+/* FFA tab lit while members are AFK in it (panel.js paintFfaTabs). */
+/* FFA tab: an asterisk in the plugin's colour while someone is in the list. */
+.rqum-panel__tab.has-people::after, .rqum-big__tab.has-people::after { content: '*'; color: var(--color-gold, #d4af37); font-weight: 700; margin-left: 1px; }
+/* Big window tables: no sideways scroll. A long name gets the "…" (the tag, star and eye stay);
+   the other columns keep their width; tighter padding. */
+.rqum-big__table td:first-child .rqum-big__name { max-width: 150px; }
+.rqum-big__table td:first-child .rqum-big__name > * { flex: none; }
+.rqum-big__table td:first-child .rqum-big__name-text { flex: 0 1 auto; min-width: 2em; white-space: nowrap; }
+.rqum-big__table td, .rqum-big__table th .rqum-big__sort { padding-left: 6px; padding-right: 6px; }
+/* Column titles may break on two lines ("Spy / Off") rather than widen their column. */
+.rqum-big__table th:not(:first-child) { white-space: normal; }
+.rqum-big__table th:not(:first-child) .rqum-big__sort { letter-spacing: 0.02em; line-height: 1.2; }
+/* Stats tab (common.js warStatsView). */
+.rqum-war__top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.rqum-war__box { margin-bottom: 14px; }
+.rqum-war__scroll { overflow-x: auto; }
+.rqum-war__table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rqum-war__table th { color: var(--color-gold, #d4af37); font-weight: 600; text-align: left; padding: 3px 5px; cursor: pointer; white-space: normal; line-height: 1.2; vertical-align: bottom; }
+.rqum-war__table th.is-sorted { color: var(--color-text, #e8e8e8); text-decoration: underline; }
+.rqum-war__table td { padding: 3px 5px; border-top: 1px solid rgba(255,255,255,.06); white-space: nowrap; }
+.rqum-war__table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rqum-war__table tr:not(.rqum-war__total):hover td { background: rgba(255,255,255,.04); cursor: pointer; }
+.rqum-war__total td { font-weight: 700; border-top: 0; color: var(--color-gold, #d4af37); }
+.rqum-war__name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.rqum-war__tabs { align-items: center; }
+.rqum-war__gear { flex: none !important; background: none; border: 0; color: var(--color-text-muted, #9a9aa0); font-size: 15px; cursor: pointer; padding: 0 4px; }
+.rqum-war__gear:hover { color: var(--color-gold, #d4af37); }
+.rqum-war__picker { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.1); border-radius: 6px; font-size: 12px; }
+.rqum-war__pick { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.rqum-war__name { max-width: 220px !important; overflow: hidden; text-overflow: ellipsis; }
+
+.rqum-war__fold { background: none; border: 0; color: var(--color-text-muted, #9a9aa0); cursor: pointer; padding: 0 4px 0 0; font-size: 11px; }
+.rqum-war__detail td { background: rgba(255,255,255,.02); white-space: normal; padding: 6px; }
+.rqum-war__battles { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 6px; }
+.rqum-war__battles th { color: var(--color-text-muted, #9a9aa0); font-weight: 500; text-align: left; padding: 2px 4px; }
+.rqum-war__battles td { padding: 2px 4px; border-top: 1px solid rgba(255,255,255,.05); white-space: nowrap; }
+.rqum-war__battles .is-win { color: #22c55e; }
+.rqum-war__battles .is-loss { color: #ef4444; }
+.rqum-war__chart { margin-bottom: 12px; }
+.rqum-war__picker[hidden] { display: none; }
+/* Stats tab: the table on the left, the chosen player and their graph on the right (like the
+   RQUM tab of the big window); one above the other in the small window. */
+.rqum-war__layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 12px; align-items: start; }
+.rqum-war__layout.is-compact { grid-template-columns: minmax(0, 1fr); }
+.rqum-war__layout.is-compact .rqum-war__side { order: -1; }
+.rqum-war__side { border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 10px; min-width: 0; }
+.rqum-war__side:empty { display: none; }
+.rqum-war__side-title { margin: 0 0 8px; font-size: 14px; }
+.rqum-war__side-figures { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.rqum-war__side-fig { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: inherit; font: 11px system-ui, sans-serif; cursor: pointer; }
+.rqum-war__side-fig strong { font-size: 13px; }
+.rqum-war__side-fig.is-active { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); }
+.rqum-war__side-link { display: inline-block; margin-top: 6px; color: var(--color-gold, #d4af37); font-size: 12px; }
+.rqum-war__table tr.is-selected td { background: color-mix(in srgb, var(--color-gold, #d4af37) 14%, transparent); }
+.rqum-war__battles th.is-num, .rqum-war__battles td.is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rqum-war__table th.is-num { text-align: right; }
+/* The columns' width never comes from what they hold (else the chart and the tables can grow
+   each other up to ~1,000,000 px). */
+.rqum-war__layout { width: 100%; min-width: 0; }
+.rqum-war__left, .rqum-war__side { contain: inline-size; min-width: 0; overflow: hidden; }
+.rqum-war__scroll { overflow-x: auto; max-width: 100%; }
+.rqum-war__search { width: 100%; box-sizing: border-box; margin: 0 0 6px; }
+/* 5 tabs on the first line, the rest on the second (each line filled). */
+.rqum-panel__tabs .rqum-panel__tab { flex: 1 0 18%; }

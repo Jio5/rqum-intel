@@ -1,0 +1,164 @@
+/* RQUM Intel web page. Player lists and cards come from rqum.css (the extension's own
+   styles), fed here through the same CSS variables the game defines. */
+:root {
+  color-scheme: dark;
+  --color-text: #e8e8ea;
+  --color-text-muted: #9a9aa0;
+  --color-gold: #d4af37;
+  --color-border: #3a3a40;
+  --color-danger: #ef5350;
+  --bg: #121214;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto;
+  max-width: 560px;
+  min-height: 100vh;
+  padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--color-text);
+  font: 15px/1.45 system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+[hidden] { display: none !important; }
+
+.top__version { color: var(--color-text-muted, #9a9aa0); font-size: 13px; }
+.top { display: flex; align-items: center; gap: 10px; padding: calc(14px + env(safe-area-inset-top)) 0 12px; }
+.top__eye { height: 28px; }
+.top h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+}
+
+button { font: inherit; cursor: pointer; }
+.link { background: none; border: 0; padding: 4px 0; color: var(--color-text-muted); font-size: 13px; }
+
+.login p { color: var(--color-text-muted); }
+.login input,
+#body input[type="search"] {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  font-size: 16px; /* below 16px, iOS zooms in on focus */
+}
+.login button[type="submit"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-gold);
+  border-radius: 6px;
+  background: none;
+  color: var(--color-gold);
+  font-weight: 600;
+}
+.login button:disabled { opacity: 0.5; }
+
+.tabs { display: flex; border-bottom: 1px solid var(--color-border); margin-bottom: 12px; }
+.tabs button {
+  flex: 1;
+  padding: 10px 4px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.tabs button.is-active { color: var(--color-text); border-bottom-color: var(--color-gold); }
+/* ⤢: the big window (rqum/bigview.js). */
+.tabs button.tabs__expand { flex: none; padding: 10px 10px; font-size: 16px; }
+.tabs button.tabs__expand:hover { color: var(--color-gold); }
+
+/* Bigger touch targets and text than the in-game window. */
+#body .rqum-list__row { padding: 10px 2px; }
+#body .rqum-list__meta { font-size: 12px; }
+#body .rqum-card { font-size: 14px; }
+#body .rqum-card__head,
+#body .rqum-card__age { font-size: 12px; }
+#body .rqum-card__row { padding: 2px 0; }
+#body .rqum-list__detail a { display: inline-block; padding: 6px 0; font-size: 13px; }
+
+/* Add tab */
+.add-form h2 {
+  margin: 18px 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.add-form h2:first-child { margin-top: 0; }
+.add-form input:not([type="search"]) {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+.field { display: block; margin-bottom: 8px; }
+.field__label { display: block; margin-bottom: 3px; font-size: 13px; color: var(--color-text-muted); }
+.stat-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.picked { display: flex; align-items: baseline; gap: 8px; }
+.picked:empty { display: none; }
+.picked .link { margin-left: auto; color: var(--color-gold); }
+.current { margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.03); }
+.current:empty { display: none; }
+.hint { margin: 0 0 8px; font-size: 13px; color: var(--color-text-muted); }
+.primary {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--color-gold);
+  border-radius: 6px;
+  background: none;
+  color: var(--color-gold);
+  font-weight: 600;
+}
+.primary:disabled { opacity: 0.5; }
+.secondary {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 9px;
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text);
+}
+.secondary:disabled { opacity: 0.5; }
+.add-form input.from-ocr { border-color: var(--color-gold); background: color-mix(in srgb, var(--color-gold) 10%, transparent); }
+.ocr-text { margin-bottom: 10px; font-size: 12px; color: var(--color-text-muted); }
+.ocr-text pre { max-height: 180px; overflow: auto; white-space: pre-wrap; }
+.form-message { min-height: 1.4em; color: var(--color-gold); }
+.form-message.error { color: var(--color-danger); }
+
+.status { min-height: 1.4em; font-size: 12px; color: var(--color-text-muted); }
+.error,
+.login .error { color: var(--color-danger); }
+
+/* My entries tab: one manual entry per row, its value editable. */
+.mine-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.mine-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mine-edit input { flex: 1; min-width: 120px; }
+.tabs button[hidden] { display: none; }
+/* Players tab (phones): every player of the database, by pages. */
+.section-title { margin: 16px 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: var(--color-gold); }
+.more-button { width: 100%; margin: 10px 0; padding: 10px; border: 1px solid var(--color-border); border-radius: 6px; background: none; color: var(--color-gold); }
+.more-button[hidden] { display: none; }
+/* A computer: the big window's layout right in the page (rqum/bigview.js mount), wider. */
+body.is-wide { max-width: 1240px; }
+#body .rqum-big__filter { display: block; width: auto; margin: 0; }
+
+/* Main colour picker in the header (app.js applyAccent). */
+.top__accent { margin-left: auto; display: inline-flex; align-items: center; }
+.top__accent input { width: 28px; height: 22px; padding: 0; border: 1px solid var(--color-border, #333); border-radius: 4px; background: none; cursor: pointer; }
