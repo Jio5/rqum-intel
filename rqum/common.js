@@ -34,7 +34,7 @@ RQUM.whenSignedIn = () => {
 
 RQUM.getConfig = async () => {
   const { rqumConfig } = await chrome.storage.local.get('rqumConfig');
-  return { captureEnabled: true, shareOwnStats: true, greenAttack: true, compactAttack: true, hideClanRecent: false, fortAlert: true, ...rqumConfig };
+  return { captureEnabled: true, shareOwnStats: true, greenAttack: true, compactAttack: true, hideClanRecent: false, fortAlert: true, tierCosts: true, eyeButtons: true, attackFilters: true, ffaMarks: true, gearCheck: true, dashboardPlus: true, voteInBar: true, dashAttackList: true, dashAssassinate: true, mercReminder: true, summaryHistory: true, buildingCosts: true, profileTiles: true, battleTotals: true, collapseCards: true, resultWindow: true, ...rqumConfig };
 };
 
 // Fort alert (option fortAlert, on by default): the clan's members, me included, whose fort is at
@@ -332,6 +332,51 @@ function el(tag, className, text) {
 }
 RQUM.el = el;
 
+// Shown at the top of the card instead of as rows: race and class (with their bonus), and the
+// clan (already before the name); the fort's % is not shown.
+const CARD_TOP = new Set(['race', 'class', 'clan', 'fort_pct']);
+// The bonus each race and class gives (the game's Race & Class page).
+const RACE_BONUS = {
+  human: '+6% income', goblin: '+6% defense', undead: '+6% offense', elf: '+6% spy',
+  giants: '+6% offense', ents: '+6% defense', dwarves: '+6% income', halflings: '+6% spy',
+};
+// A profile says "Dwarf" where the Race & Class page says "Dwarves": both forms.
+Object.assign(RACE_BONUS, { humans: RACE_BONUS.human, goblins: RACE_BONUS.goblin, elves: RACE_BONUS.elf, giant: RACE_BONUS.giants,
+  ent: RACE_BONUS.ents, dwarf: RACE_BONUS.dwarves, halfling: RACE_BONUS.halflings });
+const CLASS_BONUS = { fighter: '+4% offense', cleric: '+4% defense', thief: '+4% income', assassin: '+4% spy' };
+// "🧬 Undead (+5% offense) · ⚔️ Fighter (+5% offense)", and "✏️ was Human" in orange after
+// a race, class or clan that changed (stats.former_*, set by the database).
+function identityLine(stats) {
+  const race = stats.race?.v ?? stats.report_info?.v?.race;
+  const cls = stats.class?.v ?? stats.report_info?.v?.class;
+  const changes = ['race', 'class', 'clan'].map((k) => [k, stats[`former_${k}`]]).filter(([, f]) => f?.v != null);
+  if (!race && !cls && !changes.length) return null;
+  const line = el('div', 'rqum-card__identity');
+  const part = (icon, value, bonus, key) => {
+    if (!value) return;
+    if (line.childElementCount) line.append(' · ');
+    const span = el('span', 'rqum-card__ident', `${icon} ${value}`);
+    if (bonus) span.appendChild(el('span', 'rqum-card__bonus', ` (${bonus})`));
+    line.appendChild(span);
+    const former = stats[`former_${key}`];
+    if (former?.v != null) line.appendChild(changedTag(key, former));
+  };
+  part('🧬', race, RACE_BONUS[String(race).toLowerCase()], 'race');
+  part('🎓', cls, CLASS_BONUS[String(cls).toLowerCase()], 'class');
+  // The clan is in the title: only its change is said here.
+  if (stats.former_clan?.v != null) {
+    if (line.childElementCount) line.append(' · ');
+    line.appendChild(changedTag('clan', stats.former_clan));
+  }
+  return line;
+}
+function changedTag(key, former) {
+  const was = String(former.v || '').trim() || 'no clan';
+  const tag = el('span', 'rqum-renamed', `✏️ ${key === 'clan' ? 'clan ' : ''}was ${was}`);
+  tag.title = `${key[0].toUpperCase()}${key.slice(1)} changed in the game: was "${was}" (change seen ${RQUM.formatAge(former.at)} ago)`;
+  return tag;
+}
+
 // Latest known stats of one player (a row from rqum_get_players), each with its own age.
 // Used by the floating panel. options.only: the stats to show, in that order.
 RQUM.intelCard = (player, options = {}) => {
@@ -339,6 +384,8 @@ RQUM.intelCard = (player, options = {}) => {
   card.appendChild(el('div', 'rqum-card__title', RQUM.withClan(player.player_name || `#${player.player_id}`, player.stats?.clan?.v)));
   const renamed = RQUM.renamedTag(player.stats?.former_name, true);
   if (renamed) card.appendChild(renamed);
+  const identity = identityLine(player.stats || {});
+  if (identity) card.appendChild(identity);
   card.appendChild(el('div', 'rqum-card__head',
     `Updated ${RQUM.formatAge(player.updated_at)} ago${player.updated_by ? ` by ${player.updated_by}` : ''}`));
 
@@ -348,7 +395,7 @@ RQUM.intelCard = (player, options = {}) => {
   // Ignored stats saved by an older version stay hidden.
   const entries = Object.entries(stats)
     .filter(([k, st]) => showRank(k, st))
-    .filter(([k]) => !RQUM.parsers.IGNORED_STATS.has(k) && !k.startsWith('fort_hp') && k !== 'former_name' && !REPORT_FOLDS.some(([, keys]) => keys.includes(k))
+    .filter(([k]) => !RQUM.parsers.IGNORED_STATS.has(k) && !k.startsWith('fort_hp') && !k.startsWith('former_') && !CARD_TOP.has(k) && !REPORT_FOLDS.some(([, keys]) => keys.includes(k))
       && (!options.only || options.only.includes(k)))
     .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
     .slice(0, CARD_MAX_STATS);
@@ -611,113 +658,18 @@ RQUM.rankingView = (players, dayBefore = {}) => {
   return wrap;
 };
 
-// ---- FFA tab (rows from rqum_ffa_list) ---------------------------------------------
-// RQUM members AFK (for the night...) who may be attacked by other members. On top, my own
-// AFK: the number of hours and a button, or, while AFK, until when and a button to stop.
-// opts: { set(hours) -> Promise<{ok, error}>, reload(), profileLink(id) }; rows tell is_me.
-const FFA_HOURS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+// ---- FFA tab ----------------------------------------------------------------------
 const clock = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-const hoursLeft = (iso) => {
-  const min = Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
-  return min >= 60 ? `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}` : `${min} min`;
-};
 
+// The FFA tab: the members who let RQUM members attack them while they hold at least some
+// gold (their ⚙ Settings), me included. opts.open = [{ player_id, player_name, stats,
+// min_gold, is_me }] (RQUM.ffaOpenRows), the most gold on hand first. (rows: no longer used.)
 RQUM.ffaView = (rows, opts) => {
   const wrap = el('div', 'rqum-ffa');
-  const mine = rows.find((r) => r.is_me);
-  const box = el('div', 'rqum-ffa__me');
-  const note = el('span', 'rqum-muted');
-  // The gold from which the clan may attack me (0 or empty: any gold): "5M", "800k", "1 234 567".
-  const gold = el('input', 'rqum-ffa__gold');
-  gold.placeholder = '0';
-  gold.inputMode = 'decimal';
-  gold.title = 'Members may attack you only while you hold at least this much gold (empty or 0: any)';
-  const minGold = () => {
-    const raw = gold.value.trim().replace(/[\s,]/g, '').toLowerCase();
-    if (!raw) return 0;
-    const m = raw.match(/^(\d+(?:\.\d+)?)([kmb])?$/);
-    return m ? Math.round(Number(m[1]) * ({ k: 1e3, m: 1e6, b: 1e9 }[m[2]] || 1)) : null;
-  };
-  const act = async (hours, button) => {
-    button.disabled = true;
-    note.textContent = 'Saving…';
-    const res = await opts.set(hours, minGold());
-    button.disabled = false;
-    if (!res.ok) { note.textContent = res.error; return; }
-    opts.reload();
-  };
-  if (mine) {
-    box.append(el('span', 'rqum-ffa__state', `😴 You are AFK until ${clock(mine.until)} (${hoursLeft(mine.until)} left)`
-      + (mine.min_gold > 0 ? `, from ${RQUM.formatNumber(mine.min_gold)} gold` : '')));
-    const stop = el('button', 'rqum-btn', "I'm back");
-    stop.type = 'button';
-    stop.addEventListener('click', () => act(0, stop));
-    box.append(stop);
-  } else {
-    const hours = el('select', 'rqum-ffa__hours');
-    for (const h of FFA_HOURS) {
-      const o = el('option', '', `${h} h`);
-      o.value = String(h);
-      hours.appendChild(o);
-    }
-    hours.value = '8';
-    const go = el('button', 'rqum-btn', "😴 I'm AFK");
-    go.type = 'button';
-    go.addEventListener('click', () => {
-      if (minGold() === null) { note.textContent = 'Gold: a number like 5M, 800k or 0'; return; }
-      act(Number(hours.value), go);
-    });
-    box.append(el('span', '', 'AFK for'), hours, el('span', '', 'from'), gold, el('span', '', 'gold'), go);
-  }
-  box.append(note);
-  wrap.append(box, el('p', 'rqum-muted', 'Members AFK who may be attacked by other RQUM members (FFA) until the time shown, once they hold the gold shown. They then appear in your Attack list whatever its filters.'));
-
-  // Leaders: a box to put another member in the list (by name), and "Remove" on each line.
-  if (opts.add) {
-    const add = el('div', 'rqum-ffa__me rqum-ffa__add');
-    // The clan's members, A to Z (opts.members), else a name to type.
-    const who = el(opts.members?.length ? 'select' : 'input', 'rqum-ffa__who');
-    if (opts.members?.length) {
-      for (const name of opts.members) { const o = el('option', '', name); o.value = name; who.appendChild(o); }
-    } else who.placeholder = 'Member name';
-    const h = el('select', 'rqum-ffa__hours');
-    for (const n of FFA_HOURS) { const o = el('option', '', `${n} h`); o.value = String(n); h.appendChild(o); }
-    h.value = '8';
-    const g = el('input', 'rqum-ffa__gold');
-    g.placeholder = '0';
-    const addNote = el('span', 'rqum-muted');
-    const btn = el('button', 'rqum-btn', 'Add');
-    btn.type = 'button';
-    btn.addEventListener('click', async () => {
-      const raw = g.value.trim().replace(/[\s,]/g, '').toLowerCase();
-      const m = raw.match(/^(\d+(?:\.\d+)?)([kmb])?$/);
-      const min = !raw ? 0 : m ? Math.round(Number(m[1]) * ({ k: 1e3, m: 1e6, b: 1e9 }[m[2]] || 1)) : null;
-      if (!who.value.trim()) { addNote.textContent = 'Enter a member name'; return; }
-      if (min === null) { addNote.textContent = 'Gold: a number like 5M, 800k or 0'; return; }
-      btn.disabled = true;
-      addNote.textContent = 'Saving…';
-      const res = await opts.add(who.value.trim(), Number(h.value), min);
-      btn.disabled = false;
-      if (!res.ok) { addNote.textContent = res.error; return; }
-      opts.reload();
-    });
-    add.append(el('span', 'rqum-ffa__state', '★ Leader: add'), who, el('span', '', 'for'), h, el('span', '', 'from'), g, el('span', '', 'gold'), btn, addNote);
-    wrap.appendChild(add);
-  }
-
-  const others = rows.filter((r) => r !== mine);
-  if (!others.length) wrap.appendChild(el('p', 'rqum-muted', 'Nobody else is AFK right now.'));
-  else wrap.appendChild(ffaList(others, opts));
-
-  // Members who may always be attacked from some gold on hand (their ⚙ Settings), not AFK:
-  // opts.open = [{ player_id, player_name, stats, min_gold }], the most gold on hand first.
-  const afk = new Set(rows.map((r) => String(r.player_id)));
-  const open = (opts.open || []).filter((r) => !afk.has(String(r.player_id)));
-  if (open.length) {
-    wrap.append(el('h4', 'rqum-ffa__title', '💰 Open from some gold'),
-      el('p', 'rqum-muted', 'Members who let RQUM members attack them while they hold at least the gold shown (their ⚙ Settings). ✓: they hold it, as last seen.'),
-      ffaList(open, { ...opts, add: null }));
-  }
+  const open = opts.open || [];
+  wrap.appendChild(el('p', 'rqum-muted', 'Members RQUM members may attack while they hold at least the gold shown (set yours in ⚙ Settings: an amount, or 3x your GPT). ✓: they hold it, as last seen. They then appear in your Attack list whatever its filters.'));
+  if (!open.length) wrap.appendChild(el('p', 'rqum-muted', 'Nobody is open right now.'));
+  else wrap.appendChild(ffaList(open, opts));
   return wrap;
 };
 
@@ -735,6 +687,7 @@ function ffaList(rows, opts) {
     const name = el('span', 'rqum-list__name', RQUM.withClan(r.player_name || `#${r.player_id}`, r.stats?.clan?.v));
     const renamed = RQUM.renamedTag(r.stats?.former_name);
     if (renamed) name.appendChild(renamed);
+    if (r.is_me) name.appendChild(el('span', 'rqum-muted', ' (you)'));
     row.append(name, el('span', 'rqum-list__meta', meta));
     if (opts.add) {
       const remove = el('button', 'rqum-link-btn', 'Remove');
@@ -762,11 +715,11 @@ function ffaList(rows, opts) {
 }
 
 // opts.open of RQUM.ffaView: the members open from some gold (rqum_member_settings'
-// attack_gold) with their stats (rows of rqum_alliance), me ({ id } or { name }) left out.
+// attack_gold) with their stats (rows of rqum_alliance), me ({ id } or { name }) marked is_me.
 RQUM.ffaOpenRows = (attackGold, players, me = {}) => players
-  .filter((p) => attackGold?.[p.player_id] != null && String(p.player_id) !== String(me.id ?? '')
-    && !(me.name && nameKey(p.player_name) === nameKey(me.name)))
-  .map((p) => ({ player_id: p.player_id, player_name: RQUM.cleanName(p.player_name), stats: p.stats, min_gold: Number(attackGold[p.player_id]) || 0 }))
+  .filter((p) => attackGold?.[p.player_id] != null)
+  .map((p) => ({ player_id: p.player_id, player_name: RQUM.cleanName(p.player_name), stats: p.stats, min_gold: Number(attackGold[p.player_id]) || 0,
+    is_me: String(p.player_id) === String(me.id ?? '') || Boolean(me.name && nameKey(p.player_name) === nameKey(me.name)) }))
   .sort((a, b) => (b.stats?.gold_on_hand?.v || 0) - (a.stats?.gold_on_hand?.v || 0));
 
 // ---- Clans tab (rows from rqum_clans_list) -----------------------------------------
@@ -1041,8 +994,14 @@ RQUM.historyChart = (rows, onDelete = null) => {
 // The graph of one stat with its period buttons (1 day, 7 days, 1 month, season).
 // fetchRows(days) -> [{ hour, v }]: a player's stat, or a clan's (Clans tab).
 // deleteRow(hour): deletes one point (a click on it), then the graph is read again; leaders and
-// the admin only (RQUM.canDeletePoints, set by the window).
-RQUM.canDeletePoints = false;
+// the admin only (asked once: this member's leader rank, or the admin key in this browser).
+let canDeletePoints = null;
+const mayDeletePoints = () => (canDeletePoints ??= (async () => {
+  try {
+    const [me, admin] = await Promise.all([RQUM.send('me'), RQUM.send('isAdmin')]);
+    return Boolean(me?.data?.officer || admin?.data);
+  } catch { return false; }
+})());
 function historyPanel(fetchRows, deleteRow = null) {
   const panel = el('div', 'rqum-chart-panel');
   const periods = el('div', 'rqum-chart__periods');
@@ -1061,7 +1020,7 @@ function historyPanel(fetchRows, deleteRow = null) {
         const from = Date.now() - days * 86400000 - 3600000;
         rows = rows.filter((r) => new Date(r.hour).getTime() >= from);
       }
-      const onDelete = deleteRow && RQUM.canDeletePoints && (async (hour) => { await deleteRow(hour); load(label); });
+      const onDelete = deleteRow && (await mayDeletePoints()) && (async (hour) => { await deleteRow(hour); load(label); });
       if (mine === ticket) holder.replaceChildren(RQUM.historyChart(rows, onDelete));
     } catch (err) {
       if (mine === ticket) holder.replaceChildren(el('p', 'rqum-muted', String(err?.message || err)));
@@ -1096,6 +1055,15 @@ function showRank(key, stat) {
 // floor, saved as <stat>_floor. When it is newer and higher than the last known value it is
 // shown instead, as "> X"; a real value seen later takes over again.
 const FLOORS = { total_defense: 'total_defense_floor', spy_defense: 'spy_defense_floor' };
+
+// The floor of a figure when it is shown instead of it (newer, and above the figure), else null.
+RQUM.floorOf = (stats, key) => {
+  const floor = stats?.[FLOORS[key]];
+  if (typeof floor?.v !== 'number') return null;
+  const known = stats[key];
+  const newer = !known?.at || new Date(floor.at) >= new Date(known.at);
+  return newer && !(Number(known?.v) >= floor.v) ? floor : null;
+};
 
 function withFloors(stats) {
   const out = { ...stats };
@@ -1255,6 +1223,41 @@ if (globalThis.chrome?.storage?.local && globalThis.chrome?.runtime?.id) {
   });
 }
 
+// ---- Battle totals with one player (from DarkThrone Enhancer): my Stats readings (stats.js) as
+//      tiles. att: my figures on them (stats.attacked[id]), def: theirs on me (stats.attackers[id]),
+//      spy: the spy operations both ways (stats.spies[id]). Profile page and Stats tab card. ----
+RQUM.battleTotals = (att = {}, def = {}, spy = null) => {
+  const n = (v) => RQUM.formatExact(v || 0);
+  const wl = (w, l) => { const s = el('span'); s.append(el('span', 'is-win', `${n(w)}W`), ' · ', el('span', 'is-loss', `${n(l)}L`)); return s; };
+  const tile = (label, value, sub, cls) => {
+    const t = el('div', 'rqum-bt__tile');
+    const v = el('div', `rqum-bt__value ${cls || ''}`);
+    v.append(value);
+    t.append(el('div', 'rqum-bt__label', label), v);
+    if (sub) t.appendChild(el('div', 'rqum-bt__sub', sub));
+    return t;
+  };
+  const myAtk = att.attacks || 0;
+  const theirAtk = def.attacks || 0;
+  const net = (att.gold || 0) - (def.gold || 0);
+  const grid = el('div', 'rqum-bt');
+  grid.append(
+    tile('⚔️ My attacks', wl(att.wins, myAtk - (att.wins || 0)), `${n(myAtk)} total`),
+    tile('💰 Gold I looted', `+${n(att.gold)}`, '', 'is-win'),
+    tile('🛡️ Their attacks on me', wl(theirAtk - (def.wins || 0), def.wins), `${n(theirAtk)} total (their wins · losses)`),
+    tile('🩸 Gold they looted', `−${n(def.gold)}`, '', 'is-loss'),
+    tile('📊 Net gold', `${net >= 0 ? '+' : '−'}${n(Math.abs(net))}`, '', net >= 0 ? 'is-win' : 'is-loss'),
+  );
+  if (spy) {
+    const ops = (spy.opsWon || 0) + (spy.opsLost || 0);
+    grid.append(
+      tile('🕵️ My spies', wl(spy.reconWon, spy.reconLost), ops ? `sabotage / assassinate: ${n(spy.opsWon)}W · ${n(spy.opsLost)}L` : 'recons'),
+      tile('👁️ Their spies caught', n(spy.caught), `${n(spy.spiedMe)} got through`),
+    );
+  }
+  return grid;
+};
+
 // ---- Stats tab (stats.js): my war statistics --------------------------------------------
 // Two tables: the players I attacked (attacks, wins, gold plundered, units killed, and my
 // assassinations / units assassinated / sabotages on them) and the players who attacked me
@@ -1273,7 +1276,7 @@ const WAR_TABLES = [
 ];
 
 let warTab = 'attacked';
-let warScope = 'me'; // 'me' or 'clan' (every member's statistics added up)
+let warScope = 'me'; // 'me', 'clan' (every member's statistics added up) or 'm:<player id>' (one member's)
 
 // Every member's statistics (rqum_war_clan rows) added up into one, as if one player.
 function mergeWarStats(rows) {
@@ -1350,21 +1353,36 @@ RQUM.warStatsView = (stats, opts) => {
       go.disabled = false;
     }
   });
-  // 👤 my statistics / 👥 the whole clan's (every member's, added up).
+  // 👤 a menu: my statistics (default) or one member's, among those who sent theirs; 👥 the
+  // whole clan's (every member's, added up).
+  const clanRows = opts.clan ? (opts.clanRows ??= opts.clan().catch(() => [])) : Promise.resolve([]);
   const scope = el('div', 'rqum-ranking__tabs rqum-war__scope');
-  for (const [key, label] of [['me', '👤 Me'], ['clan', '👥 Whole clan']]) {
-    const b = el('button', key === warScope ? 'is-active' : '', label);
-    b.type = 'button';
-    b.addEventListener('click', () => { warScope = key; wrap.replaceWith(RQUM.warStatsView(stats, opts)); });
-    scope.appendChild(b);
-  }
+  const who = el('select', `rqum-war__who${warScope !== 'clan' ? ' is-active' : ''}`);
+  // "Whole clan" on: the menu shows "👤 Who?" so that choosing Me is a change too.
+  if (warScope === 'clan') { const o = el('option', '', '👤 Who?'); o.value = ''; o.hidden = true; who.appendChild(o); }
+  const meOption = el('option', '', '👤 Me');
+  meOption.value = 'me';
+  who.appendChild(meOption);
+  const myId = String(RQUM.parsers?.myPlayerId?.(document) ?? '');
+  clanRows.then((rows) => {
+    rows.filter((r) => String(r.player_id) !== myId)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }))
+      .forEach((r) => { const o = el('option', '', `👤 ${RQUM.cleanName(r.name)}`); o.value = `m:${r.player_id}`; who.appendChild(o); });
+    who.value = warScope === 'clan' ? '' : warScope;
+    if (who.value !== warScope && warScope !== 'clan') who.value = 'me';
+  });
+  who.addEventListener('change', () => { warScope = who.value; wrap.replaceWith(RQUM.warStatsView(stats, opts)); });
+  const all = el('button', warScope === 'clan' ? 'is-active' : '', '👥 Whole clan');
+  all.type = 'button';
+  all.addEventListener('click', () => { warScope = 'clan'; wrap.replaceWith(RQUM.warStatsView(stats, opts)); });
+  scope.append(who, all);
   top.append(note);
   if (!stats) top.prepend(go);
   wrap.append(top);
   if (opts.clan) wrap.appendChild(scope);
   if (!stats) return wrap;
   // Reports read against the totals the game shows ("of 488 battles"): any gap is said.
-  const LABELS = { outgoing: 'attacks', incoming: 'attacks on me', assassinate: 'assassinations', sabotage: 'sabotages' };
+  const LABELS = { outgoing: 'attacks', incoming: 'attacks on me', assassinate: 'assassinations', sabotage: 'sabotages', spyOut: 'my spy ops', spyIn: 'spy ops on me (the anonymous ones not counted)' };
   const check = Object.entries(stats.expected || {}).map(([f, n]) => {
     const got = stats.read?.[f] || 0;
     return `${LABELS[f] || f}: ${got}${got === n ? ' ✓' : ` of ${n}`}`;
@@ -1381,8 +1399,10 @@ RQUM.warStatsView = (stats, opts) => {
   picker.hidden = true;
   gear.addEventListener('click', () => { picker.hidden = !picker.hidden; });
   const content = el('div');
+  // "Whole clan": "We attacked" / "Attacked us".
+  const CLAN_TITLES = { attacked: '⚔️ We attacked', attackers: '🛡️ Attacked us' };
   for (const [key, title] of WAR_TABLES) {
-    const b = el('button', '', title);
+    const b = el('button', '', warScope === 'clan' ? CLAN_TITLES[key] : title);
     b.type = 'button';
     b.dataset.key = key;
     b.addEventListener('click', () => { warTab = key; show(); });
@@ -1400,9 +1420,19 @@ RQUM.warStatsView = (stats, opts) => {
   async function loadExtras() {
     if (warScope === 'clan' && opts.clan) {
       content.replaceChildren(el('p', 'rqum-muted', 'Loading the clan…'));
-      const rows = await opts.clan().catch(() => []);
+      const rows = await clanRows;
       data = mergeWarStats(rows);
       note.textContent = `${rows.length} member${rows.length === 1 ? '' : 's'} with RQUM ${rows.length ? '(their figures as of their last Stats reading)' : ''}`;
+    } else if (warScope.startsWith('m:') && opts.clan) {
+      content.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
+      const row = (await clanRows).find((r) => `m:${r.player_id}` === warScope);
+      if (!row) { warScope = 'me'; return; }
+      data = { ...row.stats, attacked: row.stats?.attacked || {}, attackers: row.stats?.attackers || {} };
+      const memberName = RQUM.cleanName(row.name);
+      // "⚔️ Rage attacked" / "🛡️ Attacked Rage".
+      const titles = { attacked: `⚔️ ${memberName} attacked`, attackers: `🛡️ Attacked ${memberName}` };
+      tabs.querySelectorAll('button[data-key]').forEach((b) => { b.textContent = titles[b.dataset.key] || b.textContent; });
+      note.textContent = `${memberName}'s figures, as of their last Stats reading (${RQUM.formatAge(row.updated_at)} ago)`;
     }
     const ids = [...new Set(['attacked', 'attackers'].flatMap((k) => Object.keys(data[k] || {})))].filter((id) => /^\d+$/.test(id));
     clanTags = opts.clanOf ? await opts.clanOf(ids).catch(() => ({})) : {};
@@ -1502,8 +1532,10 @@ RQUM.warStatsView = (stats, opts) => {
     left.append(...(rows.length ? [search, count, scroll] : [el('p', 'rqum-muted', 'Nobody.')]));
     layout.append(left, side);
     content.replaceChildren(layout);
-    // The first player of the table is chosen at first, and when the sub-tab changes.
-    if ((!selected || selected.key !== key) && rows[0]) select(rows[0], key, table.querySelector('tr:nth-child(3)'));
+    // The first player of the table is chosen at first, and when the sub-tab changes; in the
+    // small window nobody until a player is clicked (the card and its graph take room there).
+    if (opts.compact && selected?.key !== key) { selected = null; side.replaceChildren(); }
+    else if ((!selected || selected.key !== key) && rows[0]) select(rows[0], key, table.querySelector('tr:nth-child(3)'));
     else paintSide();
   }
 
@@ -1531,6 +1563,8 @@ RQUM.warStatsView = (stats, opts) => {
     card.appendChild(el('div', 'rqum-card__title', RQUM.withClan(selected.name || `#${selected.id}`, clanTags[selected.id])));
     const last = selected.recent?.[0]?.at;
     card.appendChild(el('div', 'rqum-card__head', last ? `Last battle ${RQUM.formatAge(last)} ago` : ' '));
+    // Battle totals with them (both ways) on top of the card.
+    card.appendChild(RQUM.battleTotals(data.attacked?.[selected.id], data.attackers?.[selected.id], data.spies?.[selected.id] || null));
     for (const [k, label] of choices) {
       const line = el('div', 'rqum-card__row rqum-card__row--graph');
       line.tabIndex = 0;

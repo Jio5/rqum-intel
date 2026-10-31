@@ -651,3 +651,197 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-war__search { width: 100%; box-sizing: border-box; margin: 0 0 6px; }
 /* 5 tabs on the first line, the rest on the second (each line filled). */
 .rqum-panel__tabs .rqum-panel__tab { flex: 1 0 18%; }
+.rqum-card__identity { margin: 2px 0 6px; font-size: 12px; color: var(--color-text, #e8e8e8); }
+.rqum-card__bonus { color: var(--color-text-muted, #9a9aa0); }
+/* "To the last tier" and "units against their gear" chips (Training, Armory, Battle Upgrades):
+   one look, grey labels, the figures in colour. */
+.rqum-tier-chip, .rqum-gear-chip { display: inline-block; margin-left: 8px; padding: 2px 9px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 6px;
+  background: rgba(255, 255, 255, .04); color: var(--color-text-muted, #9a9aa0); font: 500 12px/1.5 system-ui, sans-serif;
+  letter-spacing: 0; text-transform: none; vertical-align: middle; white-space: nowrap; }
+.rqum-tier-chip b, .rqum-gear-chip b { font-weight: 700; }
+.rqum-tier-chip b { color: var(--color-gold, #d4af37); }
+.rqum-tier-chip.is-done { color: #22c55e; }
+.rqum-gear-chip .is-ok { color: #22c55e; }
+.rqum-gear-chip .is-missing { color: #ef4444; }
+.rqum-gear-chip .is-extra { color: #f59e0b; }
+/* Stats tab: "👤 Me ▾" menu (a member's figures), styled as the sub-tab buttons. */
+.rqum-war__who { flex: 1 1 30%; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15); background: var(--color-bg-card, #1b1b1f); color: inherit; font: inherit; font-size: 12px; cursor: pointer; text-align: center; }
+.rqum-war__who.is-active { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); }
+
+/* ⚙ Settings: a fold of boxes under an option (Dashboard: what to show). */
+.rqum-option-fold { margin: -2px 0 6px 24px; font-size: 12px; }
+.rqum-option-fold summary { cursor: pointer; color: var(--color-text-muted, #9a9aa0); }
+.rqum-option-fold__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 2px 10px; padding: 6px 0 2px; }
+.rqum-option-fold__item { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+/* The Dashboard's tiles (dashboard.js): rows, each stretched over the whole width. */
+.rqum-dash-grid { display: flex; flex-direction: column; gap: 0.5rem; }
+.rqum-dash-row { display: flex; gap: 0.5rem; }
+.rqum-dash-row > div { flex: 1 1 0; }
+/* Narrow screens (phones): three tiles a line, a short last line stretched too. */
+@media (max-width: 900px) {
+  .rqum-dash-row { flex-wrap: wrap; }
+  .rqum-dash-row > div { flex: 1 1 30% !important; min-width: 96px !important; }
+}
+/* "Vote 4 DTG" in the top bar (vote.js). */
+.player-stats-bar .rqum-vote-in-bar { text-decoration: none; }
+/* The Dashboard's Attack List (dash-attack.js), as DarkThrone Enhancer's: one grid line per player. */
+.rqum-atk-header { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+.rqum-atk-header h2 { margin-right: 0.3rem; }
+.rqum-atk-total { font-size: 0.8rem; color: #9aa0b5; }
+.rqum-atk-gold { color: #22c55e !important; font-weight: 700; }
+.rqum-atk-filters { display: flex; align-items: center; gap: 0.7rem; margin-left: auto; font-size: 0.8rem; color: #9aa0b5; }
+.rqum-atk-filters label { display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; white-space: nowrap; }
+.rqum-atk-filters b { color: #e6e2d6; }
+.rqum-atk-list { max-height: 24rem; overflow: auto; }
+.rqum-atk-list { container-type: inline-size; overflow-x: hidden; }
+.rqum-atk-list .rqum-grid-head, .rqum-atk-list .dash-qa-row.rqum-grid {
+  display: grid; grid-template-columns: 30px minmax(70px, 1fr) 46px 24px 54px 54px 40px 48px 48px 42px 44px 306px;
+  align-items: center; column-gap: 0.35rem; }
+.rqum-atk-list .rqum-grid-head { position: sticky; top: 0; z-index: 2; padding: 0.3rem 0.2rem; background: var(--color-bg-card, #0d0d0d);
+  border-bottom: 1px solid var(--color-border, #3a3a48); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em; color: #9aa0b5; text-align: center; }
+.rqum-atk-list .rqum-grid-head > span:nth-child(2) { text-align: left; }
+.rqum-atk-list .rqum-grid-head > span[data-sorted]:not([data-sorted=""])::after { content: ' ' attr(data-sorted); }
+.rqum-atk-list .dash-qa-row.rqum-grid { padding: 0.35rem 0.2rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.rqum-grid .dash-qa-avatar { justify-self: center; }
+.rqum-grid .dash-qa-avatar img, .rqum-grid .avatar-placeholder { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; display: inline-flex; align-items: center; justify-content: center; }
+.rqum-grid .rqum-c { font-size: 0.78rem; white-space: nowrap; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.rqum-grid .rqum-c-clan { color: #9aa0b5; font-weight: 600; font-size: 0.74rem; }
+.rqum-grid .rqum-c-name { display: flex; align-items: baseline; gap: 0.3rem; min-width: 0; overflow: hidden; white-space: nowrap; font-weight: 600; }
+.rqum-grid .rqum-c-name .dash-qa-name { overflow: hidden; text-overflow: ellipsis; color: inherit; text-decoration: none; }
+.rqum-grid .rqum-c-gold.is-rich { color: #22c55e; }
+.rqum-grid .rqum-c-off, .rqum-h-off { color: #ef4444; }
+.rqum-grid .rqum-c-def, .rqum-h-def { color: #3b82f6; }
+.rqum-grid .rqum-c-soff, .rqum-h-soff { color: #f59e0b; }
+.rqum-grid .rqum-c-sdef, .rqum-h-sdef { color: #a855f7; }
+/* Actions in fixed places, so they line up from row to row: turns, Attack, age of the figure
+   (green buttons), Spy, Sabo. */
+.rqum-grid .rqum-c-actions, .rqum-h-actions { display: grid; grid-template-columns: 44px 62px 72px 52px 52px; align-items: center; gap: 0.3rem; justify-items: stretch; }
+.rqum-h-actions > span { text-align: center; }
+.rqum-grid .rqum-c-actions .btn { justify-content: center; text-align: center; }
+.rqum-grid .rqum-c-actions > form { display: none; }
+.rqum-grid .rqum-c-actions .rqum-turns { grid-column: 1; }
+.rqum-grid .rqum-c-actions .dash-qa-btn { grid-column: 2; }
+.rqum-grid .rqum-c-actions .rqum-atk-age { grid-column: 3; font-size: 0.7rem; white-space: nowrap; text-align: center; }
+.rqum-grid .rqum-c-actions .rqum-op-btn[data-op="spy"] { grid-column: 4; }
+.rqum-grid .rqum-c-actions .rqum-op-btn[data-op="sabotage"] { grid-column: 5; }
+/* The name takes what is left; the RQUM eye and marks keep their size after it. */
+.rqum-grid .rqum-c-name .dash-qa-name { flex: 0 1 auto; min-width: 0; max-width: none; width: auto; }
+.rqum-grid .rqum-c-name > :not(.dash-qa-name) { flex: none; }
+.rqum-grid .rqum-c-actions .btn { flex: none; padding: 0.25rem 0.4rem; font-size: 0.78rem; white-space: nowrap; margin: 0 !important; }
+.rqum-grid .rqum-turns { flex: none; width: 46px !important; min-width: 0 !important; padding: 0.2rem !important; font-size: 0.75rem; text-align: center; }
+.rqum-grid .rqum-c-actions > * { flex: none; }
+.rqum-grid .rqum-c-max { color: #f5c842; font-size: 0.75rem; font-weight: 600; text-align: center; white-space: nowrap; }
+.rqum-grid .rqum-c-actions .rqum-c-max { grid-column: 1 / 4; }
+.rqum-grid .rqum-ffa-mark { font-size: 0.68rem; color: #9aa0b5; font-weight: 400; }
+/* Spy / Sabo buttons of the Dashboard's Attack List; a used-up counter greyed. */
+.rqum-grid .rqum-op-btn.is-used { opacity: 0.5; }
+/* The floating panel with an attack or spy result (result-window.js). */
+.rqum-result-panel { position: fixed; top: 80px; right: 24px; width: min(560px, 92vw); height: min(520px, 78vh); display: flex; flex-direction: column;
+  box-sizing: border-box; min-width: 280px; min-height: 140px; max-width: 96vw; max-height: 94vh; resize: both; overflow: hidden; z-index: 2147483000;
+  background: var(--color-bg-card, #17171f); border: 1px solid var(--color-border, #3a3a48); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.6); color: var(--color-text, #e6e2d6); }
+.rqum-result-panel__head { display: flex; align-items: center; gap: .5rem; padding: .5rem .8rem; cursor: move; user-select: none; border-bottom: 1px solid var(--color-border, #3a3a48); flex: none; }
+.rqum-result-panel__head strong { flex: 1; font-size: .9rem; }
+.rqum-result-panel__body { flex: 1; min-height: 0; overflow: auto; padding: .6rem; }
+/* A narrower card still: Fort and Rank go, everything else stays in the width. */
+@container (max-width: 860px) {
+  .rqum-atk-list .rqum-grid-head, .rqum-atk-list .dash-qa-row.rqum-grid { grid-template-columns: 30px minmax(36px, 1fr) 40px 22px 54px 48px 48px 42px 44px 286px; column-gap: 0.25rem; }
+  .rqum-grid .rqum-c-actions, .rqum-h-actions { grid-template-columns: 42px 60px 70px 48px 48px; gap: 0.25rem; }
+  .rqum-atk-list:not(.rqum-qas-list) .rqum-grid-head > :nth-child(6), .rqum-atk-list:not(.rqum-qas-list) .rqum-grid-head > :nth-child(7),
+  .rqum-atk-list:not(.rqum-qas-list) .dash-qa-row.rqum-grid > :nth-child(6), .rqum-atk-list:not(.rqum-qas-list) .dash-qa-row.rqum-grid > :nth-child(7) { display: none; }
+}
+/* Phone: Off, Spy Off and Spy Def go too (Def stays), the actions get tighter so the
+   names have room. */
+@media (max-width: 768px) {
+  .rqum-atk-list .rqum-grid-head, .rqum-atk-list .dash-qa-row.rqum-grid { grid-template-columns: 26px minmax(60px, 1fr) 34px 18px 44px 40px 222px; column-gap: 0.2rem; }
+  .rqum-atk-list:not(.rqum-qas-list) .rqum-grid-head > :is(:nth-child(6), :nth-child(7), :nth-child(8), :nth-child(10), :nth-child(11)),
+  .rqum-atk-list:not(.rqum-qas-list) .dash-qa-row.rqum-grid > :is(:nth-child(6), :nth-child(7), :nth-child(8), :nth-child(10), :nth-child(11)) { display: none; }
+  .rqum-grid .rqum-c { font-size: 0.72rem; }
+  .rqum-grid .dash-qa-avatar img, .rqum-grid .avatar-placeholder { width: 24px; height: 24px; }
+  .rqum-grid .rqum-c-clan { font-size: 0.66rem; text-overflow: clip; }
+  .rqum-atk-list .rqum-grid-head { font-size: 0.58rem; letter-spacing: 0; }
+  .rqum-grid .rqum-c-actions, .rqum-h-actions { grid-template-columns: 36px 50px 36px 44px 44px; gap: 0.15rem; }
+  .rqum-grid .rqum-turns { width: 36px !important; font-size: 0.7rem; }
+  .rqum-grid .rqum-c-actions .btn { padding: 0.2rem 0.2rem; font-size: 0.7rem; }
+  .rqum-grid .rqum-c-actions .rqum-atk-age { font-size: 0.62rem; white-space: normal; line-height: 1.1; }
+}
+/* Quick Assassinate (dash-assassinate.js): avatar, name, clan, level, Spy Def, ⚠️, used (+ timer),
+   units, Assassinate. */
+.rqum-qas-list .rqum-grid-head, .rqum-qas-list .dash-qa-row.rqum-grid { grid-template-columns: 30px minmax(90px, 240px) 24px minmax(54px, 1fr) 22px 100px 86px 96px; }
+.rqum-qas-list .rqum-grid-head > span:nth-child(9) { text-align: left; }
+.rqum-grid .rqum-qas-used.is-maxed { color: #ef4444; font-weight: 600; }
+.rqum-qas-list .rqum-grid-head > :nth-child(4), .rqum-qas-list .dash-qa-row.rqum-grid > :nth-child(4) { text-align: right; }
+.rqum-qas-list .rqum-c-name .rqum-c-clan { flex: none; font-size: 0.7rem; }
+.rqum-grid .rqum-qas-timer { color: #f5c842; font-size: 0.7rem; font-weight: 600; }
+.rqum-grid .rqum-qas-cat { width: 100%; min-width: 0; padding: 0.2rem !important; font-size: 0.75rem; }
+.rqum-grid .rqum-qas-go { padding: 0.25rem 0.45rem; font-size: 0.78rem; white-space: nowrap; margin: 0 !important; }
+@media (max-width: 768px) {
+  .rqum-qas-list .rqum-grid-head, .rqum-qas-list .dash-qa-row.rqum-grid { grid-template-columns: 26px minmax(60px, 1fr) 18px 44px 16px 52px 66px 76px; column-gap: 0.2rem; }
+  .rqum-qas-list .rqum-qas-timer { display: block; font-size: 0.6rem; }
+  .rqum-grid .rqum-qas-go { padding: 0.2rem 0.25rem; font-size: 0.68rem; }
+}
+/* Mercenaries not bought today (merc.js): a glowing round icon next to my name. */
+.rqum-merc-icon { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-left: 8px; vertical-align: middle;
+  border-radius: 50%; border: 1px solid #f59e0b; background: rgba(245,158,11,0.15); box-shadow: 0 0 6px rgba(245,158,11,0.55); text-decoration: none; font-size: 14px; line-height: 1; }
+.rqum-merc-icon img { width: 18px; height: 18px; object-fit: contain; }
+/* Daily Summary (summary.js): period buttons, Net Gold chart, calendar. */
+.rqum-period-tabs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.rqum-period-tabs .rqum-range-note { font-size: 0.75rem; }
+.rqum-period-tabs .rqum-day-step { padding-left: 0.55rem; padding-right: 0.55rem; }
+.rqum-period-tabs .rqum-day-step:disabled { opacity: 0.35; cursor: default; }
+.rqum-sum-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.rqum-sum-area { fill: rgba(212,162,76,0.18); stroke: none; }
+.rqum-sum-line { fill: none; stroke: #d4a24c; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.rqum-sum-dot { fill: #d4a24c; stroke: #17171f; stroke-width: 1; vector-effect: non-scaling-stroke; transition: r 0.1s ease; }
+.rqum-sum-dot.is-active { fill: #f0c878; r: 4.5; }
+.rqum-sum-hit { fill: transparent; cursor: pointer; }
+.rqum-sum-axis { display: flex; justify-content: space-between; font-size: 11px; color: #9a968a; margin-top: 2px; }
+.rqum-sum-tip { position: fixed; z-index: 2147483647; pointer-events: none; opacity: 0; background: #1c1c26; border: 1px solid #3a3a48; border-radius: 6px;
+  padding: 6px 10px; font-size: 12px; line-height: 1.4; color: #e6e2d6; box-shadow: 0 2px 8px rgba(0,0,0,0.4); white-space: nowrap; transition: opacity 0.08s ease; }
+.rqum-sum-tip__date { color: #9a968a; font-size: 11px; margin-bottom: 2px; }
+.rqum-cal { position: fixed; z-index: 2147483001; width: 252px; padding: 0.5rem; background: var(--color-bg-card, #17171f); border: 1px solid var(--color-border, #3a3a48);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); color: var(--color-text, #e6e2d6); font-size: 0.8rem; user-select: none; }
+.rqum-cal__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; }
+.rqum-cal__head .btn { padding: 0 0.5rem; }
+.rqum-cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.rqum-cal__wd, .rqum-cal__day { display: flex; align-items: center; justify-content: center; height: 28px; border-radius: 5px; }
+.rqum-cal__wd { color: #9aa0b5; height: 20px; }
+.rqum-cal__day { cursor: pointer; }
+.rqum-cal__day.is-future { color: #555; cursor: default; }
+.rqum-cal__day.is-empty { color: #7a7f92; }
+.rqum-cal__day.is-kept { color: #e6e2d6; font-weight: 600; background: rgba(212,162,76,0.12); }
+.rqum-cal__day.is-today { outline: 1px solid #d4a24c; }
+.rqum-cal__day.is-selected { background: #d4a24c; color: #17171f; }
+/* Buildings page (buildings.js): the cost of every next level, locked / available. */
+.rqum-bld-total { display: flex; flex-wrap: wrap; gap: 0.5rem 1.6rem; align-items: baseline; margin: 0 0 0.8rem; padding: 0.6rem 0.9rem;
+  border: 1px solid var(--color-border, #2a2a3a); border-radius: 8px; background: rgba(0,0,0,0.25); font-size: 0.9rem; }
+.rqum-bld-stat { cursor: help; }
+.rqum-bld-stat__label { color: #9aa0b5; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.rqum-bld-stat strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.rqum-bld-stat strong.is-locked { color: #ef4444; }
+.rqum-bld-stat strong.is-open { color: #facc15; }
+.rqum-bld-stat__more { color: #9aa0b5; font-size: 0.8rem; }
+/* Battle totals with one player (RQUM.battleTotals): profile page and Stats tab card. */
+.rqum-bt { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.4rem; margin: 0.3rem 0 0.6rem; }
+.rqum-bt__tile { padding: 0.4rem 0.55rem; border: 1px solid var(--color-border, #2a2a3a); border-radius: 8px; background: rgba(0,0,0,0.25); min-width: 0; }
+.rqum-bt__label { font-size: 0.66rem; color: #9aa0b5; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rqum-bt__value { font-weight: 700; font-size: 0.95rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rqum-bt__sub { font-size: 0.68rem; color: #9aa0b5; }
+.rqum-bt .is-win { color: #22c55e; }
+.rqum-bt .is-loss { color: #ef4444; }
+/* Profile tiles (profile.js). */
+.rqum-ptiles { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.9rem 1.2rem; }
+.rqum-ptiles__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 0.5rem; }
+.rqum-ptile { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.65rem; border: 1px solid var(--color-border, #2a2a3a); border-radius: 8px; background: rgba(0,0,0,0.25); min-width: 0; cursor: help; }
+.rqum-ptile__icon { font-size: 1.05rem; line-height: 1; width: 26px; text-align: center; flex: none; }
+.rqum-ptile__text { display: flex; flex-direction: column; min-width: 0; }
+.rqum-ptile__label { font-size: 0.62rem; color: #9aa0b5; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+.rqum-ptile strong { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rqum-bt-note { font-size: 0.78rem; margin-bottom: 0.3rem; }
+/* Fold button of the cards (collapse.js). */
+.rqum-fold { margin-right: 0.5rem; padding: 0 0.45rem !important; font-size: 0.8rem; line-height: 1.4; vertical-align: middle; }
+/* The small window: battle totals two by two, tighter. */
+.rqum-panel .rqum-bt { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.3rem; }
+.rqum-panel .rqum-bt__tile { padding: 0.3rem 0.45rem; }
+.rqum-panel .rqum-bt__label { font-size: 0.6rem; }
+.rqum-panel .rqum-bt__value { font-size: 0.85rem; }
+.rqum-panel .rqum-bt__sub { font-size: 0.62rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

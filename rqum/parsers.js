@@ -13,7 +13,8 @@
   const FOREIGN = '[id^="qal-"], [class*="qal-"], .dash-qa-row';
 
   // Stats never stored, whatever the page shows them on.
-  const IGNORED_STATS = new Set(['race', 'class', 'fort_hp', 'fortress', 'clan_tag']);
+  // (Race and class are kept: shown at the top of the card, a change stands out.)
+  const IGNORED_STATS = new Set(['fort_hp', 'fortress', 'clan_tag']);
 
   // List columns worth keeping, by header label -> stat key (same keys as the profile).
   const LIST_COLUMNS = {
@@ -177,7 +178,7 @@
     });
     page.querySelectorAll('.intel-item').forEach((item) => {
       const key = normKey(txt(item.querySelector('.intel-label')));
-      if (IGNORED_STATS.has(key)) info[key] = valueOf(item.querySelector('.intel-value'));
+      if (IGNORED_STATS.has(key) || key === 'race' || key === 'class') info[key] = valueOf(item.querySelector('.intel-value'));
     });
     // Only on a report that revealed something (not a caught spy's report, which has a header too).
     if (Object.keys(info).length && Object.keys(stats).length) stats.report_info = info;
