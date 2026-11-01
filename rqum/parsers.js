@@ -47,8 +47,18 @@
   }
 
   // The logged-in player (header link): never stored as a target.
+  // On a phone the header's name link may be missing: then my own profile ("(You)"), a link
+  // marked "(You)", or the id seen last time in this browser.
   function myPlayerId(doc) {
-    return playerIdFromUrl(doc.querySelector('.game-header .user-name')?.getAttribute('href'));
+    const MY_ID_KEY = 'rqumMyPlayerId';
+    let id = playerIdFromUrl(doc.querySelector('.game-header .user-name, a.user-name')?.getAttribute('href'));
+    if (!id && /\(You\)/i.test(txt(doc.querySelector('.profile-title h2')))) id = playerIdFromUrl(doc.location?.pathname || '');
+    if (!id) id = playerIdFromUrl([...doc.querySelectorAll('a[href*="/game/player/"]')].find((a) => /\(You\)/i.test(txt(a)))?.getAttribute('href'));
+    try {
+      if (id) localStorage.setItem(MY_ID_KEY, id);
+      else id = localStorage.getItem(MY_ID_KEY) || null;
+    } catch (_) { /* storage blocked */ }
+    return id;
   }
 
   // A player link's text without avatar placeholder, clan badge and "(You)", nor the marks
@@ -232,6 +242,10 @@
     if (!report) return [];
     const at = report.querySelector('.battle-time time')?.getAttribute('datetime');
     const out = [];
+    // The banner is the viewer's outcome: on my defense report, "Defeat" = the attacker won.
+    const lost = !!report.querySelector('.result-banner.defeat');
+    const me = myPlayerId(doc);
+    const meDefending = !!me && playerIdFromUrl(report.querySelector('.combatant.defender .combatant-name a')?.getAttribute('href')) === me;
     for (const side of ['attacker', 'defender']) {
       const link = report.querySelector(`.combatant.${side} .combatant-name a`);
       const id = playerIdFromUrl(link?.getAttribute('href'));
@@ -242,9 +256,15 @@
       put(stats, 'total_defense', stat('defense'));
       // A lost attack hides the defense, but it was higher than the attacker's offense: kept
       // as a floor (shown "> X" when above the last known defense).
-      if (side === 'defender' && report.querySelector('.result-banner.defeat') && !('total_defense' in stats)) {
+      if (side === 'defender' && !meDefending && lost && !('total_defense' in stats)) {
         const offense = valueOf(report.querySelector('.combatant.attacker .combatant-stat.offense .stat-value'));
         if (typeof offense === 'number') stats.total_defense_floor = offense;
+      }
+      // Someone who won an attack on me: their offense was higher than my defense then (a floor,
+      // when the report hides their offense).
+      if (side === 'attacker' && meDefending && lost && !('total_offense' in stats)) {
+        const defense = valueOf(report.querySelector('.combatant.defender .combatant-stat.defense .stat-value'));
+        if (typeof defense === 'number') stats.total_offense_floor = defense;
       }
       out.push(observation(id, playerName(link), side === 'defender' ? 'attack' : 'defense', stats, at));
     }
@@ -444,6 +464,8 @@
         if (/^plundered from enemies/i.test(label)) read('gold plundered', tr.cells[1]);
         else if (/^lost to enemy attacks/i.test(label)) read('gold lost', tr.cells[1]); // shown "−135.05M": kept positive
       }
+      // Gold ratio: gold plundered ÷ gold lost this season (2 decimals).
+      if (stats.gold_plundered > 0 && stats.gold_lost > 0) stats.gold_ratio = Math.round(stats.gold_plundered / stats.gold_lost * 100) / 100;
     }
     // My own profile: level, gold, army, population, clan.
     if (playerIdFromUrl(loc.pathname) === me) {

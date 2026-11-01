@@ -752,15 +752,22 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 /* Phone: Off, Spy Off and Spy Def go too (Def stays), the actions get tighter so the
    names have room. */
 @media (max-width: 768px) {
-  .rqum-atk-list .rqum-grid-head, .rqum-atk-list .dash-qa-row.rqum-grid { grid-template-columns: 26px minmax(60px, 1fr) 34px 18px 44px 40px 222px; column-gap: 0.2rem; }
+  .rqum-atk-list .rqum-grid-head, .rqum-atk-list .dash-qa-row.rqum-grid { grid-template-columns: minmax(60px, 1fr) 18px 44px 40px 194px; column-gap: 0.2rem; }
+  /* No avatar nor clan on a phone: the names get the room. */
+  .rqum-atk-list .rqum-grid-head > :nth-child(1), .rqum-atk-list .dash-qa-row.rqum-grid > :nth-child(1),
+  .rqum-atk-list:not(.rqum-qas-list) .rqum-grid-head > :nth-child(3), .rqum-atk-list:not(.rqum-qas-list) .dash-qa-row.rqum-grid > :nth-child(3),
+  .rqum-qas-list .rqum-c-name .rqum-c-clan { display: none; }
   .rqum-atk-list:not(.rqum-qas-list) .rqum-grid-head > :is(:nth-child(6), :nth-child(7), :nth-child(8), :nth-child(10), :nth-child(11)),
   .rqum-atk-list:not(.rqum-qas-list) .dash-qa-row.rqum-grid > :is(:nth-child(6), :nth-child(7), :nth-child(8), :nth-child(10), :nth-child(11)) { display: none; }
   .rqum-grid .rqum-c { font-size: 0.72rem; }
   .rqum-grid .dash-qa-avatar img, .rqum-grid .avatar-placeholder { width: 24px; height: 24px; }
   .rqum-grid .rqum-c-clan { font-size: 0.66rem; text-overflow: clip; }
   .rqum-atk-list .rqum-grid-head { font-size: 0.58rem; letter-spacing: 0; }
-  .rqum-grid .rqum-c-actions, .rqum-h-actions { grid-template-columns: 36px 50px 36px 44px 44px; gap: 0.15rem; }
-  .rqum-grid .rqum-turns { width: 36px !important; font-size: 0.7rem; }
+  .rqum-grid .rqum-c-actions, .rqum-h-actions { grid-template-columns: 36px 50px 36px 30px 30px; gap: 0.15rem; }
+  /* Spy / Sabo: the icon only (the count in the tooltip; a used one stays dimmed). */
+  .rqum-grid .rqum-op-count { display: none; }
+  /* The turns menu without its arrow: the number only. */
+  .rqum-grid .rqum-turns { width: 36px !important; font-size: 0.7rem; -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: none !important; padding: 0.2rem 0 !important; text-align: center; text-align-last: center; }
   .rqum-grid .rqum-c-actions .btn { padding: 0.2rem 0.2rem; font-size: 0.7rem; }
   .rqum-grid .rqum-c-actions .rqum-atk-age { font-size: 0.62rem; white-space: normal; line-height: 1.1; }
 }
@@ -775,7 +782,7 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-grid .rqum-qas-cat { width: 100%; min-width: 0; padding: 0.2rem !important; font-size: 0.75rem; }
 .rqum-grid .rqum-qas-go { padding: 0.25rem 0.45rem; font-size: 0.78rem; white-space: nowrap; margin: 0 !important; }
 @media (max-width: 768px) {
-  .rqum-qas-list .rqum-grid-head, .rqum-qas-list .dash-qa-row.rqum-grid { grid-template-columns: 26px minmax(60px, 1fr) 18px 44px 16px 52px 66px 76px; column-gap: 0.2rem; }
+  .rqum-qas-list .rqum-grid-head, .rqum-qas-list .dash-qa-row.rqum-grid { grid-template-columns: minmax(60px, 1fr) 18px 44px 16px 52px 66px 76px; column-gap: 0.2rem; }
   .rqum-qas-list .rqum-qas-timer { display: block; font-size: 0.6rem; }
   .rqum-grid .rqum-qas-go { padding: 0.2rem 0.25rem; font-size: 0.68rem; }
 }
@@ -845,3 +852,38 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-panel .rqum-bt__label { font-size: 0.6rem; }
 .rqum-panel .rqum-bt__value { font-size: 0.85rem; }
 .rqum-panel .rqum-bt__sub { font-size: 0.62rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Hit List tab (panel.js): the clan's targets, read from the game's clan page. */
+.rqum-hit__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.rqum-hit__head a { margin-left: auto; font-size: 12px; }
+.rqum-hit__item { border-bottom: 1px solid rgba(255,255,255,.08); padding: 4px 0; }
+.rqum-hit__sum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; cursor: pointer; list-style: none; }
+.rqum-hit__sum::-webkit-details-marker { display: none; }
+.rqum-hit__name { font-weight: 700; }
+.rqum-hit__meta { font-size: 11px; }
+.rqum-hit__acts { display: flex; gap: 4px; margin-left: auto; }
+.rqum-hit__stats { display: flex; flex-wrap: wrap; gap: 4px; flex-basis: 100%; }
+.rqum-hit__chip { font-size: 11px; padding: 1px 6px; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; white-space: nowrap; }
+.rqum-hit__scroll { overflow-x: auto; margin: 4px 0 6px; }
+.rqum-hit__table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.rqum-hit__table th, .rqum-hit__table td { padding: 2px 6px; text-align: right; white-space: nowrap; border-bottom: 1px solid rgba(255,255,255,.05); }
+.rqum-hit__table th:first-child, .rqum-hit__table td:first-child { text-align: left; }
+.rqum-hit__add { display: flex; gap: 6px; margin-bottom: 4px; }
+.rqum-hit__add input { flex: 1; min-width: 0; }
+.rqum-hit__add .rqum-hit__note { flex: 0 1 40%; }
+.rqum-hit__found:empty { display: none; }
+.rqum-hit__notetext { flex-basis: 100%; font-size: 11px; color: #c9b98a; }
+.rqum-hit__none { font-size: 11px; margin: 4px 0; }
+.rqum-hit__src { font-size: 10px; padding: 0 4px; border-radius: 4px; background: rgba(212,162,76,.15); color: #d4a24c; }
+.rqum-hit__overview { margin: 6px 0 10px; display: flex; flex-direction: column; gap: 10px; }
+.rqum-hit__tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
+.rqum-hit__tile { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(255,255,255,.03); }
+.rqum-hit__tile-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #9aa0b5; }
+.rqum-hit__tile strong { font-size: 15px; }
+.rqum-hit__chart-title { font-size: 12px; color: #9aa0b5; margin-bottom: 4px; }
+.rqum-hit__two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.rqum-hit__bar { display: grid; grid-template-columns: 110px 1fr 56px; align-items: center; gap: 6px; font-size: 11px; margin: 2px 0; }
+.rqum-hit__bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rqum-hit__bar-track { height: 8px; border-radius: 4px; background: rgba(255,255,255,.06); overflow: hidden; }
+.rqum-hit__bar-fill { display: block; height: 100%; background: #d4a24c; border-radius: 4px; }
+.rqum-hit__bar-v { text-align: right; }

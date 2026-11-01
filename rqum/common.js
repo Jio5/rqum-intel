@@ -259,12 +259,12 @@ RQUM.formatAge = (iso) => {
 
 // attack: seen in a battle report of someone who attacked this player; defense: in the
 // report of someone this player attacked.
-RQUM.SOURCE_LABELS = { profile: 'profile', recon: 'spy report', attack: 'attack report', defense: 'defense report', list: 'player list', rankings: 'rankings', manual: 'manual entry', self: 'their own RQUM', caught: 'spy caught', protection: 'gold protection (tick)' };
+RQUM.SOURCE_LABELS = { profile: 'profile', recon: 'spy report', attack: 'attack report', defense: 'defense report', list: 'player list', rankings: 'rankings', manual: 'manual entry', self: 'their own RQUM', caught: 'spy caught', protection: 'gold protection (tick)', computed: 'plundered ÷ lost' };
 
 // Stats shown first in a card, in this order; any other stat follows.
 const STAT_ORDER = [
   'level', 'total_offense', 'total_defense', 'spy_offense', 'spy_defense', 'wealth', 'gold_per_turn', 'gold_plundered',
-  'gold_lost', 'units_killed', 'units_lost', 'kd_ratio', 'attack_wins', 'sabotages', 'assassin_kills',
+  'gold_lost', 'gold_ratio', 'units_killed', 'units_lost', 'kd_ratio', 'attack_wins', 'sabotages', 'assassin_kills',
   'gold_on_hand', 'army', 'population', 'fort_pct', 'clan',
   'rank_overall', 'rank_offense', 'rank_defense', 'rank_level', 'rank_gold_stolen', 'rank_net_worth',
   'rank_attack_wins', 'rank_total_kills', 'rank_defense_wins', 'rank_fort_damage', 'rank_richest', 'rank_gold_spent',
@@ -272,7 +272,7 @@ const STAT_ORDER = [
 // Stats with an hourly history (supabase/schema.sql, rqum_history): a tap shows their graph.
 RQUM.ALLIANCE_STATS = [
   'level', 'total_offense', 'total_defense', 'spy_offense', 'spy_defense', 'wealth', 'gold_per_turn', 'gold_plundered',
-  'gold_lost', 'units_killed', 'units_lost', 'kd_ratio', 'attack_wins', 'sabotages', 'assassin_kills',
+  'gold_lost', 'gold_ratio', 'units_killed', 'units_lost', 'kd_ratio', 'attack_wins', 'sabotages', 'assassin_kills',
 ];
 // What the Alliance tab shows of each member (above); all of them have a graph.
 // The game's ranks have their graph too (one point an hour for members, when seen for others).
@@ -308,7 +308,7 @@ RQUM.fetchHistory = async (playerId, stat, days) => {
 const CARD_MAX_STATS = 18;
 // Labels that "key with spaces" would get wrong.
 const STAT_LABELS = {
-  kd_ratio: 'K/D Ratio', gold_plundered: 'Total Gold Plundered', gold_lost: 'Total Gold Loss', gold_per_turn: 'Gold per Turn',
+  kd_ratio: 'K/D Ratio', gold_plundered: 'Total Gold Plundered', gold_lost: 'Total Gold Loss', gold_ratio: 'Gold Ratio', gold_per_turn: 'Gold per Turn',
   sabotages: 'Sabotages', assassin_kills: 'Units Assassinated', attack_wins: 'Attack Wins', fort_pct: 'Fort',
 };
 // The 4 combat stats get the game's colours (rqum.css) and the game's own icons
@@ -379,6 +379,17 @@ function changedTag(key, former) {
 
 // Latest known stats of one player (a row from rqum_get_players), each with its own age.
 // Used by the floating panel. options.only: the stats to show, in that order.
+// Gold ratio (gold plundered ÷ gold lost) worked out from the two figures when both are known,
+// so it shows for every player, RQUM or not; the newer of the two dates it.
+RQUM.withGoldRatio = (stats = {}) => {
+  const pl = Number(stats.gold_plundered?.v);
+  const lo = Number(stats.gold_lost?.v);
+  if (!(pl > 0 && lo > 0)) return stats;
+  const at = [stats.gold_plundered.at, stats.gold_lost.at].filter(Boolean).sort().pop();
+  if (stats.gold_ratio?.at && at && stats.gold_ratio.at >= at) return stats;
+  return { ...stats, gold_ratio: { ...stats.gold_plundered, v: Math.round(pl / lo * 100) / 100, at, src: 'computed' } };
+};
+
 RQUM.intelCard = (player, options = {}) => {
   const card = el('div', 'rqum-card');
   card.appendChild(el('div', 'rqum-card__title', RQUM.withClan(player.player_name || `#${player.player_id}`, player.stats?.clan?.v)));
@@ -391,7 +402,7 @@ RQUM.intelCard = (player, options = {}) => {
 
   const order = options.only || STAT_ORDER;
   const rank = (k) => (order.includes(k) ? order.indexOf(k) : order.length);
-  const stats = withFloors(player.stats || {});
+  const stats = withFloors(RQUM.withGoldRatio(player.stats || {}));
   // Ignored stats saved by an older version stay hidden.
   const entries = Object.entries(stats)
     .filter(([k, st]) => showRank(k, st))
@@ -581,6 +592,7 @@ const RANKINGS = [
   ['attack_wins', '🏹 Attack wins', 'attacks won', 'Attacks won (the game\'s Battle Logs), read from RQUM 0.7.17 on.'],
   ['kd_ratio', '📈 Best K/D', 'K/D ratio', 'Units killed ÷ units lost in battles (the game\'s Battle Logs).', 2],
   ['gold_plundered', '💰 Gold plundered', 'gold plundered this season', 'Gold plundered this season (the game\'s Daily Summary).'],
+  ['gold_ratio', '⚖️ Gold ratio', 'gold plundered ÷ gold lost', 'Gold plundered ÷ gold lost to attacks this season (the game\'s Daily Summary).', 2],
 ];
 RQUM.RANKING_STATS = RANKINGS.map(([k]) => k);
 // rqum_day_before rows [{ player_id, stat, v }] -> { id: { stat: v } }.
@@ -599,8 +611,11 @@ RQUM.rankingView = (players, dayBefore = {}) => {
     rankingTab = key;
     tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b.dataset.key === key));
     const [, , unit, note, decimals = 0] = RANKINGS.find(([k]) => k === key);
-    const value = (p) => Number(p.stats?.[key]?.v) || 0;
+    const value = (p) => Number(RQUM.withGoldRatio(p.stats || {})[key]?.v) || 0;
     const fmt = (v) => (decimals ? v.toFixed(decimals) : RQUM.formatNumber(v));
+    // Gold ratio: the two figures it is worked out from.
+    const calc = (p) => (key === 'gold_ratio' && p.stats?.gold_plundered && p.stats?.gold_lost
+      ? `\n${RQUM.formatExact(Number(p.stats.gold_plundered.v))} plundered ÷ ${RQUM.formatExact(Number(p.stats.gold_lost.v))} lost` : '');
     // "+12" since about 24 h ago; nothing when there is no figure that old.
     const diff = (p) => {
       const before = Number(dayBefore[p.player_id]?.[key]);
@@ -631,7 +646,7 @@ RQUM.rankingView = (players, dayBefore = {}) => {
           el('span', 'rqum-podium__value', fmt(value(p))),
           diff(p),
         );
-        step.title = `${decimals ? fmt(value(p)) : RQUM.formatExact(value(p))} ${unit}\n${statOrigin(p.stats[key])}`;
+        step.title = `${decimals ? fmt(value(p)) : RQUM.formatExact(value(p))} ${unit}${calc(p)}\n${statOrigin(RQUM.withGoldRatio(p.stats || {})[key])}`;
       }
       step.appendChild(el('span', 'rqum-podium__block', String(place)));
       podium.appendChild(step);
@@ -641,7 +656,7 @@ RQUM.rankingView = (players, dayBefore = {}) => {
       const row = el('li', 'rqum-ranking__row');
       row.append(el('span', 'rqum-ranking__place', `${i + 4}`), el('span', 'rqum-list__name', name(p)),
         el('span', 'rqum-ranking__value', fmt(value(p))), diff(p));
-      row.title = `${decimals ? fmt(value(p)) : RQUM.formatExact(value(p))} ${unit}\n${statOrigin(p.stats[key])}`;
+      row.title = `${decimals ? fmt(value(p)) : RQUM.formatExact(value(p))} ${unit}${calc(p)}\n${statOrigin(RQUM.withGoldRatio(p.stats || {})[key])}`;
       list.appendChild(row);
     });
     content.replaceChildren(podium, list, el('p', 'rqum-muted', `${note} +/− = change over the last 24 h.`));
@@ -1054,7 +1069,7 @@ function showRank(key, stat) {
 // A failed attack (or spy operation) shows the target's figure was above the attacker's: a
 // floor, saved as <stat>_floor. When it is newer and higher than the last known value it is
 // shown instead, as "> X"; a real value seen later takes over again.
-const FLOORS = { total_defense: 'total_defense_floor', spy_defense: 'spy_defense_floor' };
+const FLOORS = { total_defense: 'total_defense_floor', spy_defense: 'spy_defense_floor', total_offense: 'total_offense_floor' };
 
 // The floor of a figure when it is shown instead of it (newer, and above the figure), else null.
 RQUM.floorOf = (stats, key) => {
@@ -1080,8 +1095,8 @@ function withFloors(stats) {
 
 function floorSpan(stat) {
   const span = el('span', 'rqum-card__value rqum-card__value--floor', `> ${RQUM.formatNumber(stat.v)}`);
-  const what = stat.src === 'attack' ? 'An attack' : 'A spy operation';
-  span.title = `${what} failed with ${RQUM.formatExact(stat.v)}: it is higher than that`
+  const what = stat.src === 'attack' ? 'An attack failed with' : stat.src === 'defense' ? 'They won an attack against a defense of' : 'A spy operation failed with';
+  span.title = `${what} ${RQUM.formatExact(stat.v)}: it is higher than that`
     + (stat.known ? ` (last known: ${RQUM.formatExact(stat.known.v)}, ${RQUM.formatAge(stat.known.at)} ago)` : '');
   return span;
 }
