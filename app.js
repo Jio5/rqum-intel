@@ -498,6 +498,46 @@
     body.replaceChildren(RQUM.leaderboardView(players || [], {}));
   }
 
+  // ---- Hit List tab (RQUM.hitListView): the game's list as a member's extension last read it,
+  // and RQUM's own targets. A name opens its card on top.
+  async function renderHitListTab(body) {
+    body.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
+    let list;
+    try { list = await call('rqum_hitlist'); } catch (err) {
+      body.replaceChildren(el('p', 'rqum-muted', err.message));
+      return;
+    }
+    const [game, members, me] = await Promise.all(['rqum_hitlist_game', 'rqum_war_clan', 'rqum_me'].map((fn) => rpc(fn).catch(() => null)));
+    const ids = [...new Set([...(game?.entries || []).map((e) => Number(e.id)), ...(list || []).map((t) => Number(t.target_id))])];
+    const rows = ids.length ? await call('rqum_get_players', { p_player_ids: ids }).catch(() => []) : [];
+    const known = Object.fromEntries((rows || []).map((p) => [String(p.player_id), p]));
+    const card = el('div', 'rqum-hit__card');
+    const pick = async (id) => {
+      card.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
+      const p = (await call('rqum_get_players', { p_player_ids: [Number(id)] }).catch(() => []))?.[0];
+      const close = el('button', 'rqum-link-btn', '✕ Close');
+      close.type = 'button';
+      close.addEventListener('click', () => card.replaceChildren());
+      card.replaceChildren(close, p ? RQUM.intelCard(p) : el('p', 'rqum-muted', 'No stats yet.'));
+      card.scrollIntoView({ block: 'nearest' });
+    };
+    body.replaceChildren(card, RQUM.hitListView(
+      { game: game?.entries || null, gameAt: game?.saved_at, gameBy: game?.saved_by, rqum: list || [], members: members || [], me, known },
+      {
+        big: WIDE.matches,
+        external: true,
+        pick,
+        profileHref: (id) => `${GAME_URL}/game/player/${id}`,
+        gameHref: (path) => `${GAME_URL}${path}`,
+        search: (q) => call('rqum_search_players', { p_query: q }),
+        add: (id, name, note) => call('rqum_hitlist_add', { p_target_id: Number(id), p_name: name || null, p_note: note || null }),
+        remove: (id) => call('rqum_hitlist_remove', { p_target_id: Number(id) }),
+        reload: () => renderHitListTab(body),
+        error: (m) => setStatus(m, true),
+      },
+    ));
+  }
+
   // ---- FFA tab -----------------------------------------------------------------------
   async function renderFfaTab(body) {
     body.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
@@ -579,7 +619,7 @@
     body.replaceChildren(el('p', 'rqum-muted', 'Your manual entries that are still the latest value: correct a mistake, the date stays the same.'), list);
   }
 
-  const TABS = { search: renderSearchTab, recent: renderRecentTab, alliance: renderAllianceTab, tgo: (body) => renderAllianceTab(body, 'TGO'), ranking: renderRankingTab, clans: renderClansTab, add: renderAddTab, mine: renderMineTab, ffa: renderFfaTab, leaderboards: renderLeaderboardTab };
+  const TABS = { search: renderSearchTab, recent: renderRecentTab, alliance: renderAllianceTab, tgo: (body) => renderAllianceTab(body, 'TGO'), ranking: renderRankingTab, clans: renderClansTab, add: renderAddTab, mine: renderMineTab, ffa: renderFfaTab, leaderboards: renderLeaderboardTab, hitlist: renderHitListTab };
 
   // A computer shows the big layout (as the extension's ⤢ window) right in the page, every
   // tab; a phone shows the small window's layout, one tab at a time.

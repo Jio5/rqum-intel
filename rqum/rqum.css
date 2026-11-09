@@ -853,8 +853,28 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-panel .rqum-bt__value { font-size: 0.85rem; }
 .rqum-panel .rqum-bt__sub { font-size: 0.62rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* A player's card: my battles with them (common.js battleFold), under the card's header.
+   Small window: two tiles a line (the .rqum-panel rules above); big window: as many as fit. */
+.rqum-card__bt { margin: 2px 0 8px; }
+.rqum-card__bt-sum { cursor: pointer; color: var(--color-gold, #d4af37); font-size: 11px; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; list-style-position: inside; }
+.rqum-card__bt-short { color: #9aa0b5; font-weight: 400; font-variant-numeric: tabular-nums; }
+.rqum-card__bt-short .is-win { color: #22c55e; }
+.rqum-card__bt-short .is-loss { color: #ef4444; }
+.rqum-card__bt[open] .rqum-card__bt-short { display: none; }
+.rqum-card__bt .rqum-bt { margin: 5px 0 2px; }
+.rqum-card__bt-note { font-size: 10px; color: #9aa0b5; font-style: italic; }
+/* Compact tiles on a card: label over value, three a line in the small window, four in the big. */
+.rqum-bt--compact, .rqum-panel .rqum-bt--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+.rqum-big__side .rqum-bt--compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rqum-bt--compact .rqum-bt__tile, .rqum-panel .rqum-bt--compact .rqum-bt__tile { padding: 2px 5px; border-radius: 5px; }
+.rqum-bt--compact .rqum-bt__label, .rqum-panel .rqum-bt--compact .rqum-bt__label { font-size: 9px; letter-spacing: 0; }
+.rqum-bt--compact .rqum-bt__value, .rqum-panel .rqum-bt--compact .rqum-bt__value { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+
 /* Hit List tab (panel.js): the clan's targets, read from the game's clan page. */
 .rqum-hit__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.rqum-hit__sort { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin: 4px 0 6px; font-size: 11px; color: #9aa0b5; }
+.rqum-hit__sort select { font-size: 11px; padding: 1px 4px; background: rgba(0,0,0,0.35); color: inherit; border: 1px solid var(--color-border, #3a3a40); border-radius: 5px; }
+.rqum-hit__sort select option { background: #1b1b22; color: #e8e8e8; }
 .rqum-hit__head a { margin-left: auto; font-size: 12px; }
 .rqum-hit__item { border-bottom: 1px solid rgba(255,255,255,.08); padding: 4px 0; }
 .rqum-hit__sum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; cursor: pointer; list-style: none; }
@@ -881,9 +901,19 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-hit__tile-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #9aa0b5; }
 .rqum-hit__tile strong { font-size: 15px; }
 .rqum-hit__chart-title { font-size: 12px; color: #9aa0b5; margin-bottom: 4px; }
-.rqum-hit__two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.rqum-hit__periods { display: flex; gap: 5px; margin-bottom: -4px; }
+.rqum-hit__period { padding: 2px 10px; border: 1px solid var(--color-border, #3a3a40); border-radius: 10px; background: none; color: var(--color-text-muted, #9a9aa0); font: 600 11px system-ui, sans-serif; cursor: pointer; }
+.rqum-hit__period.is-on { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); }
+.rqum-hit__overview > div:last-child { display: flex; flex-direction: column; gap: 10px; }
+.rqum-hit__two {display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .rqum-hit__bar { display: grid; grid-template-columns: 110px 1fr 56px; align-items: center; gap: 6px; font-size: 11px; margin: 2px 0; }
 .rqum-hit__bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rqum-hit__bar-track { height: 8px; border-radius: 4px; background: rgba(255,255,255,.06); overflow: hidden; }
 .rqum-hit__bar-fill { display: block; height: 100%; background: #d4a24c; border-radius: 4px; }
 .rqum-hit__bar-v { text-align: right; }
+.rqum-hit__card:empty { display: none; }
+.rqum-hit__card { margin-bottom: 8px; }
+.rqum-hit__read { font-size: 11px; margin: 0 0 4px; }
+.rqum-hit__about { font-size: 11px; color: #9aa0b5; }
+.rqum-hit__about summary { cursor: pointer; }
+.rqum-hit__about p { margin: 3px 0 0; }

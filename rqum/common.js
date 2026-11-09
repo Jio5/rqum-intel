@@ -21,12 +21,17 @@ RQUM.send = (type, payload = {}) =>
 const nameKey = (name) => String(name ?? '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 let signedInHere = null;
 RQUM.whenSignedIn = () => {
-  signedInHere ??= RQUM.send('getStatus').then((res) => {
+  signedInHere ??= RQUM.send('getStatus').then(async (res) => {
     const name = res.ok ? res.data.signedIn : null;
     const link = document.querySelector('.game-header .user-name');
     const playing = link ? RQUM.parsers.playerName(link) : null;
     if (!name) return { ok: false, name: null, playing, reason: 'signed-out' };
-    if (playing && nameKey(playing) !== nameKey(name)) return { ok: false, name, playing, reason: 'other-player' };
+    if (playing && nameKey(playing) !== nameKey(name)) {
+      // Renamed in the game? The database moves the key to the new name, else refuses it.
+      const again = await RQUM.send('relogin', { name: playing });
+      if (again.ok) return { ok: true, name: again.data.name, playing };
+      return { ok: false, name, playing, reason: 'other-player' };
+    }
     return { ok: true, name, playing };
   });
   return signedInHere;
@@ -263,11 +268,13 @@ RQUM.SOURCE_LABELS = { profile: 'profile', recon: 'spy report', attack: 'attack 
 
 // Stats shown first in a card, in this order; any other stat follows.
 const STAT_ORDER = [
-  'level', 'total_offense', 'total_defense', 'spy_offense', 'spy_defense', 'wealth', 'gold_per_turn', 'gold_plundered',
-  'gold_lost', 'gold_ratio', 'units_killed', 'units_lost', 'kd_ratio', 'attack_wins', 'sabotages', 'assassin_kills',
-  'gold_on_hand', 'army', 'population', 'fort_pct', 'clan',
+  // The ranks right after the main figures: a member's card has more stats than
+  // CARD_MAX_STATS, and ranks placed at the end were cut off.
+  'level', 'total_offense', 'total_defense', 'spy_offense', 'spy_defense', 'gold_per_turn',
   'rank_overall', 'rank_offense', 'rank_defense', 'rank_level', 'rank_gold_stolen', 'rank_net_worth',
   'rank_attack_wins', 'rank_total_kills', 'rank_defense_wins', 'rank_fort_damage', 'rank_richest', 'rank_gold_spent',
+  'wealth', 'gold_plundered', 'gold_lost', 'gold_ratio', 'units_killed', 'units_lost', 'kd_ratio', 'attack_wins', 'sabotages', 'assassin_kills',
+  'gold_on_hand', 'army', 'population', 'fort_pct', 'clan',
 ];
 // Stats with an hourly history (supabase/schema.sql, rqum_history): a tap shows their graph.
 RQUM.ALLIANCE_STATS = [
@@ -399,6 +406,7 @@ RQUM.intelCard = (player, options = {}) => {
   if (identity) card.appendChild(identity);
   card.appendChild(el('div', 'rqum-card__head',
     `Updated ${RQUM.formatAge(player.updated_at)} ago${player.updated_by ? ` by ${player.updated_by}` : ''}`));
+  battleFold(card, player.player_id);
 
   const order = options.only || STAT_ORDER;
   const rank = (k) => (order.includes(k) ? order.indexOf(k) : order.length);
@@ -672,6 +680,442 @@ RQUM.rankingView = (players, dayBefore = {}) => {
   show(rankingTab);
   return wrap;
 };
+
+// ---- Hit List tab ------------------------------------------------------------------
+// The game's Hit List (read from the clan page by a member's extension and shared through the
+// database, with the game's own figures) and the targets added in RQUM by hand, in one list.
+// RQUM.hitListGame(doc) reads the clan page -> entries; RQUM.hitListView(data, opts) draws.
+
+// The game's clan page (/clan, its Hit List tab) -> [{ id, name, level, game, added, by, tot,
+// attackers, intel }].
+RQUM.hitListGame = (doc) => {
+  const txt = (n) => (n?.textContent || '').replace(/\s+/g, ' ').trim();
+  const idOf = (a) => (String(a?.getAttribute('href') || '').match(/\/game\/player\/(\d+)/) || [])[1];
+  const num = (n) => Number(String(n?.querySelector('[data-full]')?.getAttribute('data-full') || txt(n)).replace(/[^\d]/g, '')) || 0;
+  const out = [];
+  for (const row of doc.querySelectorAll('.hitlist-entries .hitlist-row')) {
+    const link = row.querySelector('.hitlist-target-name');
+    const id = idOf(link);
+    if (!id) continue;
+    const tot = { attacks: 0, wins: 0, gold: 0, killed: 0, ops: 0, opsWon: 0 };
+    let added = '';
+    let by = '';
+    // "12W / 12 hits", "27.23M gold", "682 kills", "11W / 11 spy ops", then when it was added.
+    row.querySelectorAll('.hitlist-stats .hitlist-stat').forEach((st) => {
+      const label = txt(st.querySelector('.hitlist-stat-label')).toLowerCase();
+      const v = [...st.querySelectorAll('.hitlist-stat-value')].map(num);
+      if (!v.length) { added = txt(st.querySelector('.hitlist-stat-label')); by = (st.querySelector('[title]')?.getAttribute('title') || '').replace(/^by\s+/i, ''); return; }
+      if (label === 'hits') { tot.wins = v[0]; tot.attacks = v[1] ?? v[0]; } else if (label === 'gold') tot.gold = v[0];
+      else if (label === 'kills') tot.killed = v[0]; else if (label === 'spy ops') { tot.opsWon = v[0]; tot.ops = v[1] ?? v[0]; }
+    });
+    // Two tables: "Attackers who hit …" (rows with an Attacker cell) and "Spies who hit …" (Spy).
+    const attackers = [...row.querySelectorAll('.hitlist-detail-table tbody tr')].filter((tr) => tr.querySelector('td[data-label="Attacker"]')).map((tr) => {
+      const cell = (l) => tr.querySelector(`td[data-label="${l}"]`);
+      const wl = [...(cell('W/L')?.querySelectorAll('span') || [])].map(num);
+      return { id: idOf(cell('Attacker')?.querySelector('a')), name: txt(cell('Attacker')), attacks: num(cell('Attacks')), wins: wl[0] || 0, losses: wl[1] || 0,
+        killed: num(cell('Kills')), gold: num(cell('Gold Stolen')), xp: num(cell('XP Gained')), fort: num(cell('Fort Dmg')), last: txt(cell('Last Hit')) };
+    });
+    const spies = [...row.querySelectorAll('.hitlist-detail-table tbody tr')].filter((tr) => tr.querySelector('td[data-label="Spy"]')).map((tr) => {
+      const cell = (l) => tr.querySelector(`td[data-label="${l}"]`);
+      const wl = [...(cell('W/L')?.querySelectorAll('span') || [])].map(num);
+      return { id: idOf(cell('Spy')?.querySelector('a')), name: txt(cell('Spy')), ops: num(cell('Ops')), wins: wl[0] || 0, losses: wl[1] || 0, recon: num(cell('Recon')),
+        sabotage: num(cell('Sabotage')), assassin: num(cell('Assassin.')), killed: num(cell('Kills')), fort: num(cell('Fort Dmg')), last: txt(cell('Last Op')) };
+    });
+    out.push({ id, name: txt(link), level: txt(row.querySelector('.hitlist-level')), game: true, added, by, tot, attackers, spies,
+      intel: row.querySelector('.hitlist-actions a[href*="/intel/"]')?.getAttribute('href') || null });
+  }
+  return out;
+};
+
+// data: { game: entries | null (RQUM.hitListGame), gameAt: when the game's list was read,
+//         rqum: rows of rqum_hitlist, members: rows of rqum_war_clan, me: rqum_me, known: { id: player } }.
+// opts: { big, external (web page), pick(id, name), profileHref(id), gameHref(path), search(query) -> rows,
+//         add(id, name, note), remove(id), reload(), error(message) }.
+RQUM.hitListView = (data, opts) => {
+  const members = data.members || [];
+  const myName = String(data.me?.name || '').toLowerCase();
+  const leader = !!data.me?.officer;
+  const known = data.known || {};
+  const hourOf = (iso) => new Date(iso).toISOString().slice(0, 13);
+  const zero = () => ({ attacks: 0, wins: 0, gold: 0, killed: 0, ops: 0, opsWon: 0 });
+  const entries = new Map((data.game || []).map((e) => [String(e.id), { ...e, id: String(e.id), attackers: [...(e.attackers || [])] }]));
+
+  // An RQUM target: a member's hits on it since an hour, from their hourly figures.
+  function since(m, id, from) {
+    const out = { ...zero(), last: null };
+    for (const [h, v] of Object.entries(m.stats?.attacked?.[id]?.hours || {})) {
+      if (h < from) continue;
+      out.attacks += v.attacks || 0; out.wins += v.wins || 0; out.gold += v.gold || 0; out.killed += v.killed || 0;
+      if (v.attacks && (!out.last || h > out.last)) out.last = h;
+    }
+    for (const [h, v] of Object.entries(m.stats?.spies?.[id]?.hours || {})) {
+      if (h < from) continue;
+      out.opsWon += (v.reconWon || 0) + (v.opsWon || 0);
+      out.ops += (v.reconWon || 0) + (v.opsWon || 0) + (v.reconLost || 0) + (v.opsLost || 0);
+    }
+    return out;
+  }
+  for (const t of data.rqum || []) {
+    const id = String(t.target_id);
+    const mine = { rqum: true, note: t.note, rqumBy: t.added_by, removable: leader || String(t.added_by || '').toLowerCase() === myName };
+    const e = entries.get(id);
+    // Also on the game's list: the game's figures, RQUM's note and ✕.
+    if (e) { Object.assign(e, mine); continue; }
+    const from = hourOf(t.added_at);
+    const rows = members.map((m) => ({ m, s: since(m, id, from) })).filter((r) => r.s.attacks || r.s.ops);
+    const tot = rows.reduce((a, { s }) => { for (const k of Object.keys(a)) a[k] += s[k]; return a; }, zero());
+    entries.set(id, { id, name: t.target_name || `#${id}`, game: false, ...mine, added: `${RQUM.formatAge(t.added_at)} ago`, by: t.added_by, tot,
+      attackers: rows.map(({ m, s }) => ({ id: String(m.player_id), name: m.name, attacks: s.attacks, wins: s.wins, losses: s.attacks - s.wins, killed: s.killed, gold: s.gold,
+        ops: `${s.opsWon} / ${s.ops}`, last: s.last ? `${RQUM.formatAge(`${s.last}:00:00Z`)} ago` : '—', readAgo: RQUM.formatAge(m.updated_at) })) });
+  }
+  const targets = [...entries.values()].sort((a, b) => b.tot.gold - a.tot.gold);
+  targets.forEach((t) => t.attackers.sort((a, b) => b.gold - a.gold || b.attacks - a.attacks));
+
+  const wrap = el('div', `rqum-hit${opts.big ? ' rqum-hit--big' : ''}`);
+  const head = el('div', 'rqum-hit__head');
+  const reload = el('button', 'rqum-link-btn', '🔄');
+  reload.type = 'button';
+  reload.title = 'Read again';
+  reload.addEventListener('click', () => opts.reload());
+  head.append(el('strong', '', `🎯 Hit List · ${targets.length} target${targets.length === 1 ? '' : 's'}`), reload);
+  const manage = el('a', '', 'Game\'s list →');
+  manage.href = opts.gameHref('/clan#hitlist');
+  manage.title = 'The game\'s Hit List (its targets are added and removed there)';
+  if (opts.external) { manage.target = '_blank'; manage.rel = 'noopener'; }
+  head.appendChild(manage);
+  wrap.appendChild(head);
+  if (!data.game) wrap.appendChild(el('p', 'rqum-muted', 'The game\'s Hit List is not known yet (a member opens this tab in the game): RQUM\'s targets only.'));
+  else if (data.gameAt) wrap.appendChild(el('p', 'rqum-muted rqum-hit__read', `Game's list read ${RQUM.formatAge(data.gameAt)} ago${data.gameBy ? ` by ${data.gameBy}` : ''}.`));
+
+  // Add a target in RQUM: a name, then a player of the database.
+  const add = el('form', 'rqum-hit__add');
+  const input = el('input');
+  input.placeholder = 'Add a target in RQUM: player name';
+  input.autocomplete = 'off';
+  const note = el('input', 'rqum-hit__note');
+  note.placeholder = 'Note (optional)';
+  note.maxLength = 200;
+  const found = el('ul', 'rqum-list rqum-hit__found');
+  let ticket = 0;
+  let timer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const query = input.value.trim();
+      const mine = ++ticket;
+      found.replaceChildren();
+      if (query.length < 2) return;
+      const rows = await opts.search(query).catch(() => []);
+      if (mine !== ticket) return;
+      for (const p of (rows || []).slice(0, 8)) {
+        const li = el('li', 'rqum-list__item');
+        const b = el('button', 'rqum-link-btn', RQUM.withClan(p.player_name || `#${p.player_id}`, p.clan));
+        b.type = 'button';
+        b.addEventListener('click', async () => {
+          try { await opts.add(p.player_id, p.player_name, note.value); } catch (err) { return opts.error(err.message); }
+          RQUM.toast?.(`🎯 ${p.player_name} added to the Hit List`);
+          opts.reload();
+        });
+        li.appendChild(b);
+        found.appendChild(li);
+      }
+      if (!found.children.length) found.appendChild(el('li', 'rqum-muted', 'Nobody found in the RQUM database.'));
+    }, 300);
+  });
+  add.addEventListener('submit', (e) => e.preventDefault());
+  add.append(input, note);
+  wrap.append(add, found);
+
+  if (opts.big && targets.length) wrap.appendChild(hitOverview(targets, members));
+  if (!targets.length) wrap.appendChild(el('p', 'rqum-muted', 'No target yet: add one above (or on the game\'s clan page).'));
+
+  // Sort: the clan's figures on them, or the target's own (RQUM database); remembered.
+  const statOf = (t, k) => known[t.id]?.stats?.[k]?.v;
+  const levelOf = (t) => statOf(t, 'level') ?? (Number(String(t.level || '').replace(/\D/g, '')) || null);
+  const HIT_SORTS = [
+    ['gold', '💰 Gold stolen', (t) => t.tot.gold],
+    ['attacks', '⚔️ Attacks', (t) => t.tot.attacks],
+    ['wins', '🏆 Attacks won', (t) => t.tot.wins],
+    ['killed', '☠️ Kills', (t) => t.tot.killed],
+    ['ops', '🕵️ Spy operations', (t) => t.tot.ops],
+    ['onhand', '🪙 Gold on hand', (t) => statOf(t, 'gold_on_hand')],
+    ['defense', '🛡️ Defense (lowest first)', (t) => statOf(t, 'total_defense'), true],
+    ['level', '⭐ Level', levelOf],
+    ['name', '🔤 Name', (t) => String(t.name || '').toLowerCase(), true],
+    ['order', '🎮 Game\'s order', null],
+  ];
+  const SORT_KEY = 'rqumHitListSort';
+  let sortBy = 'gold';
+  try { sortBy = localStorage.getItem(SORT_KEY) || 'gold'; } catch (_) { /* storage off */ }
+  if (!HIT_SORTS.some(([k]) => k === sortBy)) sortBy = 'gold';
+  const gameOrder = [...entries.keys()];
+  const list = el('div', 'rqum-hit__list');
+  if (targets.length > 1) {
+    const bar = el('label', 'rqum-hit__sort', 'Sort by ');
+    const select = el('select');
+    for (const [k, label] of HIT_SORTS) {
+      const o = el('option', '', label);
+      o.value = k;
+      select.appendChild(o);
+    }
+    select.value = sortBy;
+    select.addEventListener('change', () => {
+      sortBy = select.value;
+      try { localStorage.setItem(SORT_KEY, sortBy); } catch (_) { /* storage off */ }
+      drawList();
+    });
+    bar.appendChild(select);
+    wrap.appendChild(bar);
+  }
+  wrap.appendChild(list);
+
+  // Unknown values last, whatever the direction; ties: most gold stolen first.
+  function sorted() {
+    const [, , get, asc] = HIT_SORTS.find(([k]) => k === sortBy);
+    if (!get) return [...targets].sort((x, y) => gameOrder.indexOf(x.id) - gameOrder.indexOf(y.id));
+    const none = (v) => v == null || v === '';
+    return [...targets].sort((x, y) => {
+      const a = get(x);
+      const b = get(y);
+      if (none(a) || none(b)) return none(a) - none(b) || y.tot.gold - x.tot.gold;
+      const d = typeof a === 'string' ? a.localeCompare(b) : a - b;
+      return (asc ? d : -d) || y.tot.gold - x.tot.gold;
+    });
+  }
+
+  drawList();
+  function drawList() {
+  list.replaceChildren();
+  for (const t of sorted()) {
+    const st = known[t.id]?.stats || {};
+    const item = el('details', 'rqum-hit__item');
+    const sum = el('summary', 'rqum-hit__sum');
+    const who = el('span', 'rqum-hit__name rqum-link-btn', RQUM.withClan(t.name, st.clan?.v));
+    who.title = 'RQUM card';
+    who.addEventListener('click', (e) => { e.preventDefault(); opts.pick(t.id, t.name); });
+    const src = el('span', 'rqum-hit__src', t.game && t.rqum ? '🎮+RQUM' : t.game ? '🎮' : 'RQUM');
+    src.title = t.game ? 'On the game\'s Hit List (its figures)' : 'Added in RQUM (the clan\'s hits since then, from the members\' RQUM)';
+    const level = t.level || (st.level?.v ? `Lvl ${st.level.v}` : '');
+    const meta = el('span', 'rqum-muted rqum-hit__meta', [level, t.added].filter(Boolean).join(' · '));
+    meta.title = [t.by ? `Added by ${t.by}` : '', t.rqumBy && t.rqumBy !== t.by ? `in RQUM by ${t.rqumBy}` : ''].filter(Boolean).join(', ');
+    const acts = el('span', 'rqum-hit__acts');
+    const profile = el('a', 'rqum-btn rqum-btn--inline', 'Profile');
+    profile.href = opts.profileHref(t.id);
+    acts.appendChild(profile);
+    if (t.intel) {
+      const a = el('a', 'rqum-btn rqum-btn--inline', 'Intel');
+      a.href = opts.gameHref(new URL(t.intel, 'https://x').pathname);
+      acts.appendChild(a);
+    }
+    // On the web page the game opens in another tab.
+    if (opts.external) acts.querySelectorAll('a').forEach((a) => { a.target = '_blank'; a.rel = 'noopener'; });
+    if (t.removable) {
+      const rm = el('button', 'rqum-btn rqum-btn--inline', '✕');
+      rm.type = 'button';
+      rm.title = t.game ? 'Remove from RQUM\'s list (the game\'s list is changed on the clan page)' : 'Remove from the Hit List';
+      rm.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (!confirm(`Remove ${t.name} from RQUM's Hit List?`)) return;
+        try { await opts.remove(t.id); } catch (err) { return opts.error(err.message); }
+        opts.reload();
+      });
+      acts.appendChild(rm);
+    }
+    const chips = el('span', 'rqum-hit__stats');
+    for (const [text, title] of [
+      [`⚔️ ${t.tot.wins}W / ${t.tot.attacks}`, 'Clan attacks won / total'],
+      [`💰 ${RQUM.formatNumber(t.tot.gold)}`, `Gold stolen by the clan: ${RQUM.formatExact(t.tot.gold)}`],
+      [`☠️ ${RQUM.formatNumber(t.tot.killed)}`, 'Units killed by the clan'],
+      [`🕵️ ${t.tot.opsWon}W / ${t.tot.ops}`, 'Clan spy operations won / total'],
+    ]) {
+      const c = el('span', 'rqum-hit__chip', text);
+      c.title = title;
+      chips.appendChild(c);
+    }
+    sum.append(who, src, meta, acts, chips);
+    if (t.note) sum.appendChild(el('span', 'rqum-hit__notetext', `📝 ${t.note}`));
+    item.appendChild(sum);
+    const tables = [];
+    if (t.attackers.length) {
+      const cols = t.game
+        ? [['Attacker'], ['Attacks', 'attacks'], ['W/L'], ['Kills', 'killed'], ['Gold', 'gold'], ['XP', 'xp'], ['Fort', 'fort'], ['Last hit', 'last']]
+        : [['Attacker'], ['Attacks', 'attacks'], ['W/L'], ['Kills', 'killed'], ['Gold', 'gold'], ['Spy ops', 'ops'], ['Last hit', 'last']];
+      const table = el('table', 'rqum-hit__table');
+      const tr0 = el('tr');
+      cols.forEach(([h]) => tr0.appendChild(el('th', '', h)));
+      table.appendChild(el('thead')).appendChild(tr0);
+      const tb = table.appendChild(el('tbody'));
+      for (const a of t.attackers) {
+        const tr = el('tr');
+        for (const [h, k] of cols) {
+          const td = el('td');
+          if (h === 'Attacker') {
+            const b = el('button', 'rqum-link-btn', a.name || '?');
+            b.type = 'button';
+            if (a.readAgo) b.title = `Their figures read ${a.readAgo} ago`;
+            if (a.id) b.addEventListener('click', () => opts.pick(a.id, a.name));
+            td.appendChild(b);
+          } else if (h === 'W/L') td.textContent = `${a.wins} / ${a.losses}`;
+          else {
+            const v = a[k];
+            td.textContent = typeof v === 'number' ? RQUM.formatNumber(v) : v ?? '';
+            if (typeof v === 'number' && v >= 1e4) td.title = RQUM.formatExact(v);
+          }
+          tr.appendChild(td);
+        }
+        tb.appendChild(tr);
+      }
+      tables.push(['Attackers', table]);
+    }
+    // The game's "Spies who hit …".
+    if (t.spies?.length) {
+      const cols = [['Spy'], ['Ops', 'ops'], ['W/L'], ['Recon', 'recon'], ['Sabotage', 'sabotage'], ['Assassin.', 'assassin'], ['Kills', 'killed'], ['Fort', 'fort'], ['Last op', 'last']];
+      const table = el('table', 'rqum-hit__table');
+      const tr0 = el('tr');
+      cols.forEach(([h]) => tr0.appendChild(el('th', '', h)));
+      table.appendChild(el('thead')).appendChild(tr0);
+      const tb = table.appendChild(el('tbody'));
+      for (const a of t.spies) {
+        const tr = el('tr');
+        for (const [h, k] of cols) {
+          const td = el('td');
+          if (h === 'Spy') {
+            const b = el('button', 'rqum-link-btn', a.name || '?');
+            b.type = 'button';
+            if (a.id) b.addEventListener('click', () => opts.pick(a.id, a.name));
+            td.appendChild(b);
+          } else if (h === 'W/L') td.textContent = `${a.wins} / ${a.losses}`;
+          else td.textContent = typeof a[k] === 'number' ? RQUM.formatNumber(a[k]) : a[k] ?? '';
+          tr.appendChild(td);
+        }
+        tb.appendChild(tr);
+      }
+      tables.push(['Spies', table]);
+    }
+    for (const [title, table] of tables) {
+      const scroll = el('div', 'rqum-hit__scroll');
+      if (tables.length > 1) scroll.appendChild(el('div', 'rqum-hit__chart-title', title));
+      scroll.appendChild(table);
+      item.appendChild(scroll);
+    }
+    if (!tables.length) item.appendChild(el('p', 'rqum-muted rqum-hit__none', 'No hit by the clan yet.'));
+    list.appendChild(item);
+  }
+  }
+  wrap.appendChild(el('p', 'rqum-muted', 'RQUM targets: hits counted from each member\'s Battle Logs and spy logs read by their RQUM (Stats tab), to the hour, since the target was added.'));
+  return wrap;
+};
+
+// Big window: totals, the clan's gold from the targets over 30 days, best targets and hitters.
+function hitOverview(all, members) {
+  const zero = () => ({ attacks: 0, wins: 0, gold: 0, killed: 0, ops: 0, opsWon: 0 });
+  const box = el('div', 'rqum-hit__overview');
+  const tot = all.reduce((a, t) => { for (const k of Object.keys(a)) a[k] += t.tot[k]; return a; }, zero());
+  const tiles = el('div', 'rqum-hit__tiles');
+  for (const [label, value, title] of [
+    ['Targets', String(all.length), `${all.filter((t) => t.game).length} from the game, ${all.filter((t) => !t.game).length} added in RQUM`],
+    ['Attacks', `${tot.wins}W / ${tot.attacks}`, 'Clan attacks on the targets, won / total'],
+    ['Gold stolen', RQUM.formatNumber(tot.gold), RQUM.formatExact(tot.gold)],
+    ['Kills', RQUM.formatNumber(tot.killed), 'Units killed on the targets'],
+    ['Spy ops', `${tot.opsWon}W / ${tot.ops}`, 'Spy operations on the targets, won / total'],
+    ['Win rate', tot.attacks ? `${Math.round((tot.wins / tot.attacks) * 100)}%` : '—', 'Attacks won ÷ attacks'],
+  ]) {
+    const tile = el('div', 'rqum-hit__tile');
+    tile.title = title;
+    tile.append(el('span', 'rqum-hit__tile-label', label), el('strong', '', value));
+    tiles.appendChild(tile);
+  }
+  box.appendChild(tiles);
+  // The chart and the two rankings over a period: Day (24 h), Week, Month (30 days) or the
+  // Season, from the members' hourly figures (members with RQUM); remembered.
+  const PERIODS = [['day', 'Day', 'last 24 hours', () => 1], ['week', 'Week', 'last 7 days', () => 7],
+    ['month', 'Month', 'last 30 days', () => 30], ['season', 'Season', 'this season', daysSinceSeason]];
+  const PERIOD_KEY = 'rqumHitListPeriod';
+  let period = 'month';
+  try { period = localStorage.getItem(PERIOD_KEY) || 'month'; } catch (_) { /* storage off */ }
+  if (!PERIODS.some(([k]) => k === period)) period = 'month';
+  const tabs = el('div', 'rqum-hit__periods');
+  const view = el('div');
+  for (const [k, label, , days] of PERIODS) {
+    const b = el('button', 'rqum-hit__period', label);
+    b.type = 'button';
+    b.dataset.p = k;
+    b.title = k === 'season' ? `Since ${SEASON_START.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : `Last ${Math.round(days())} day${days() > 1 ? 's' : ''}`;
+    b.addEventListener('click', () => {
+      period = k;
+      try { localStorage.setItem(PERIOD_KEY, k); } catch (_) { /* storage off */ }
+      drawPeriod();
+    });
+    tabs.appendChild(b);
+  }
+  // Where the figures come from, for everyone reading the window.
+  const about = el('details', 'rqum-hit__about');
+  about.appendChild(el('summary', '', 'ℹ️ Where do these figures come from?'));
+  for (const line of [
+    "🎮 Game targets: the list's figures (attacks, gold, kills, spy ops) are the game's own Hit List, counted since the target was added to it, by every clan member (RQUM or not).",
+    "RQUM targets (added in RQUM only): counted from the Battle Logs and spy logs of the members who play with RQUM, since the target was added.",
+    "🎯 Most gold given: each target's gold as shown in its line (the period buttons do not change it: the game gives no history).",
+    "🏆 Best hitters: the attackers tables of the targets added up. The game counts each attacker's gold over all time, so it can be higher than the targets' totals.",
+    "💰 The chart and its Day / Week / Month / Season: the only figures over time, read from the Battle Logs of the members with RQUM (members without RQUM are missing).",
+  ]) about.appendChild(el('p', '', line));
+  box.append(tabs, view, about);
+  const ids = new Set(all.map((t) => t.id));
+  const nameOf = Object.fromEntries(all.map((t) => [t.id, t.name]));
+  function drawPeriod() {
+    tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('is-on', b.dataset.p === period));
+    const [, , label, days] = PERIODS.find(([k]) => k === period);
+    const fromHour = new Date(Date.now() - days() * 86400000).toISOString().slice(0, 13);
+    const perHour = {};
+    for (const m of members) {
+      for (const [pid, p] of Object.entries(m.stats?.attacked || {})) {
+        if (!ids.has(pid)) continue;
+        for (const [h, v] of Object.entries(p.hours || {})) {
+          if (h < fromHour || !v.gold) continue;
+          perHour[h] = (perHour[h] || 0) + v.gold;
+        }
+      }
+    }
+    let run = 0;
+    const series = Object.keys(perHour).sort().map((h) => ({ hour: `${h}:00:00Z`, v: (run += perHour[h]) }));
+    const chart = el('div', 'rqum-hit__chart');
+    chart.append(el('div', 'rqum-hit__chart-title', `💰 Gold taken from the targets, ${label} (added up, members with RQUM)`), RQUM.historyChart(series));
+    const top = (o, name) => Object.entries(o).map(([k, v]) => ({ name: name(k), v })).filter((r) => r.v).sort((a, b) => b.v - a.v).slice(0, 10);
+    // The rankings: the same figures as the list (the game's for its targets, since added; RQUM's
+    // for RQUM-only targets), whatever the period (the game gives no history).
+    const given = {};
+    const hitters = {};
+    for (const t of all) {
+      given[t.id] = t.tot.gold;
+      for (const a of t.attackers) { const who = RQUM.cleanName(a.name) || '?'; hitters[who] = (hitters[who] || 0) + (a.gold || 0); }
+    }
+    const two = el('div', 'rqum-hit__two');
+    two.append(
+      bars('🎯 Most gold given (top 10 targets, since added)', top(given, (id) => nameOf[id] || `#${id}`)),
+      bars('🏆 Best hitters (gold on the targets, as in the list)', top(hitters, (n) => n)),
+    );
+    view.replaceChildren(chart, two);
+  }
+  // Bars: the targets that gave the most gold, the members who took the most.
+  const bars = (title, rows) => {
+    const b = el('div', 'rqum-hit__bars');
+    b.appendChild(el('div', 'rqum-hit__chart-title', title));
+    const max = Math.max(1, ...rows.map((r) => r.v));
+    for (const r of rows) {
+      const line = el('div', 'rqum-hit__bar');
+      const track = el('span', 'rqum-hit__bar-track');
+      const fill = el('span', 'rqum-hit__bar-fill');
+      fill.style.width = `${Math.max(2, (r.v / max) * 100)}%`;
+      track.appendChild(fill);
+      line.title = `${r.name}: ${RQUM.formatExact(r.v)}`;
+      line.append(el('span', 'rqum-hit__bar-name', r.name), track, el('span', 'rqum-hit__bar-v', RQUM.formatNumber(r.v)));
+      b.appendChild(line);
+    }
+    if (!rows.length) b.appendChild(el('p', 'rqum-muted', 'Nothing yet.'));
+    return b;
+  };
+  drawPeriod();
+  return box;
+}
 
 // ---- FFA tab ----------------------------------------------------------------------
 const clock = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -1241,37 +1685,81 @@ if (globalThis.chrome?.storage?.local && globalThis.chrome?.runtime?.id) {
 // ---- Battle totals with one player (from DarkThrone Enhancer): my Stats readings (stats.js) as
 //      tiles. att: my figures on them (stats.attacked[id]), def: theirs on me (stats.attackers[id]),
 //      spy: the spy operations both ways (stats.spies[id]). Profile page and Stats tab card. ----
-RQUM.battleTotals = (att = {}, def = {}, spy = null) => {
-  const n = (v) => RQUM.formatExact(v || 0);
+// opts.compact (a player's card): K / M / B with two decimals, short labels, no sub-lines.
+RQUM.battleTotals = (att = {}, def = {}, spy = null, opts = {}) => {
+  const c = !!opts.compact;
+  const n = (v) => {
+    v = v || 0;
+    if (!c) return RQUM.formatExact(v);
+    const a = Math.abs(v);
+    // The biggest unit that rounds to at least 1: 999,995 -> 1.00M, not 1000.00K.
+    for (const [d, u] of [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']]) {
+      if (+(a / d).toFixed(2) >= 1) return `${(v / d).toFixed(2)}${u}`;
+    }
+    return RQUM.formatExact(v);
+  };
+  const L = (full, short) => (c ? short : full);
   const wl = (w, l) => { const s = el('span'); s.append(el('span', 'is-win', `${n(w)}W`), ' · ', el('span', 'is-loss', `${n(l)}L`)); return s; };
   const tile = (label, value, sub, cls) => {
     const t = el('div', 'rqum-bt__tile');
     const v = el('div', `rqum-bt__value ${cls || ''}`);
     v.append(value);
     t.append(el('div', 'rqum-bt__label', label), v);
-    if (sub) t.appendChild(el('div', 'rqum-bt__sub', sub));
+    if (sub && !c) t.appendChild(el('div', 'rqum-bt__sub', sub));
     return t;
   };
   const myAtk = att.attacks || 0;
   const theirAtk = def.attacks || 0;
   const net = (att.gold || 0) - (def.gold || 0);
-  const grid = el('div', 'rqum-bt');
+  const grid = el('div', `rqum-bt${c ? ' rqum-bt--compact' : ''}`);
   grid.append(
-    tile('⚔️ My attacks', wl(att.wins, myAtk - (att.wins || 0)), `${n(myAtk)} total`),
-    tile('💰 Gold I looted', `+${n(att.gold)}`, '', 'is-win'),
-    tile('🛡️ Their attacks on me', wl(theirAtk - (def.wins || 0), def.wins), `${n(theirAtk)} total (their wins · losses)`),
-    tile('🩸 Gold they looted', `−${n(def.gold)}`, '', 'is-loss'),
-    tile('📊 Net gold', `${net >= 0 ? '+' : '−'}${n(Math.abs(net))}`, '', net >= 0 ? 'is-win' : 'is-loss'),
+    tile(L('⚔️ My attacks', '⚔️ My attacks'), wl(att.wins, myAtk - (att.wins || 0)), `${n(myAtk)} total`),
+    tile(L('💰 Gold I looted', '💰 I looted'), `+${n(att.gold)}`, '', 'is-win'),
+    tile(L('🛡️ Their attacks on me', '🛡️ Their attacks'), wl(theirAtk - (def.wins || 0), def.wins), `${n(theirAtk)} total (their wins · losses)`),
+    tile(L('🩸 Gold they looted', '🩸 They looted'), `−${n(def.gold)}`, '', 'is-loss'),
+    tile(L('📊 Net gold', '📊 Net gold'), `${net >= 0 ? '+' : '−'}${n(Math.abs(net))}`, '', net >= 0 ? 'is-win' : 'is-loss'),
   );
   if (spy) {
     const ops = (spy.opsWon || 0) + (spy.opsLost || 0);
     grid.append(
       tile('🕵️ My spies', wl(spy.reconWon, spy.reconLost), ops ? `sabotage / assassinate: ${n(spy.opsWon)}W · ${n(spy.opsLost)}L` : 'recons'),
-      tile('👁️ Their spies caught', n(spy.caught), `${n(spy.spiedMe)} got through`),
+      tile(L('👁️ Their spies caught', '👁️ Spies caught'), n(spy.caught), `${n(spy.spiedMe)} got through`),
     );
   }
   return grid;
 };
+
+// ---- A player's card: my battles with them (the profile page's Battle totals) -----------------
+// Only what my RQUM already read from my Battle Logs and spy logs (stats.js, kept in this
+// browser): nothing is read from the game here. Shown only when there was a battle either way;
+// not on the web page (no logs there). A fold under the card's header, open; the summary keeps
+// the W / L when folded (remembered for every card).
+const BT_FOLD_KEY = 'rqumCardBattlesFolded';
+function battleFold(card, id) {
+  if (id == null || !RQUM.warStats?.load) return;
+  const box = el('details', 'rqum-card__bt');
+  box.hidden = true;
+  card.appendChild(box);
+  RQUM.warStats.load().then((stats) => {
+    const att = stats?.attacked?.[id];
+    const def = stats?.attackers?.[id];
+    const spy = stats?.spies?.[id];
+    if (!att?.attacks && !def?.attacks && !spy) return box.remove();
+    let folded = false;
+    try { folded = localStorage.getItem(BT_FOLD_KEY) === '1'; } catch (_) { /* storage off */ }
+    box.open = !folded;
+    const n = (v) => RQUM.formatExact(v || 0);
+    const sum = el('summary', 'rqum-card__bt-sum', '⚔️ My battles with them');
+    const short = el('span', 'rqum-card__bt-short');
+    if (att?.attacks) short.append(el('span', 'is-win', `${n(att.wins)}W`), '·', el('span', 'is-loss', `${n(att.attacks - (att.wins || 0))}L`));
+    if (def?.attacks) short.append(att?.attacks ? ' / ' : '', '🛡️ ', el('span', 'is-win', `${n(def.attacks - (def.wins || 0))}W`), '·', el('span', 'is-loss', `${n(def.wins)}L`));
+    sum.appendChild(short);
+    box.append(sum, RQUM.battleTotals(att, def, spy || {}, { compact: true }));
+    if (stats.updatedAt) box.appendChild(el('div', 'rqum-card__bt-note', `From your Battle Logs and spy logs, read ${RQUM.formatAge(stats.updatedAt)} ago`));
+    box.addEventListener('toggle', () => { try { localStorage.setItem(BT_FOLD_KEY, box.open ? '0' : '1'); } catch (_) { /* storage off */ } });
+    box.hidden = false;
+  }, () => box.remove());
+}
 
 // ---- Stats tab (stats.js): my war statistics --------------------------------------------
 // Two tables: the players I attacked (attacks, wins, gold plundered, units killed, and my
@@ -1604,4 +2092,17 @@ RQUM.warStatsView = (stats, opts) => {
 
   loadExtras().then(show, show);
   return wrap;
+};
+
+// The game's bell: how many notifications are unread (its own /api/notifications, read only;
+// marking them read is a separate call RQUM never makes). 0 when it cannot be read.
+RQUM.unreadNotifications = async () => {
+  try {
+    const res = await fetch('/api/notifications', { credentials: 'include', headers: { Accept: 'application/json' } });
+    if (!res.ok) return 0;
+    const d = await res.json();
+    const byCat = d?.unread_by_category;
+    if (byCat && typeof byCat === 'object') return Object.values(byCat).reduce((n, v) => n + (Number(v) || 0), 0);
+    return Number(d?.unread_notifications) || 0;
+  } catch (_) { return 0; }
 };
