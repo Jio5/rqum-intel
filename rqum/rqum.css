@@ -988,3 +988,11 @@ table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 
 .rqum-active__grid { display: grid; grid-template-columns: 30px repeat(24, 1fr); gap: 2px; }
 .rqum-active__grid .rqum-active__cell { height: 16px; border-radius: 2px; cursor: help; }
 .rqum-active__hlabel, .rqum-active__dlabel { font-size: 9px; color: #9aa0b5; }
+.rqum-bounty { margin: 8px 0; padding: 6px 8px; border: 1px solid rgba(245,158,11,.5); border-radius: 8px; background: rgba(245,158,11,.06); }
+.rqum-bounty.is-ended { border-color: rgba(255,255,255,.1); background: transparent; }
+.rqum-bounty__head { display: flex; align-items: center; gap: 4px; }
+.rqum-bounty__head > button { margin-left: auto; }
+.rqum-war-room__bar { margin-bottom: 8px; }
+.rqum-war-room__bar .rqum-ranking__tabs { margin-bottom: 6px; }
+.rqum-war-room__days button { flex: 1 1 20%; }
+.rqum-war-room__bar .rqum-ranking__tabs button { flex: 1 1 22%; padding: 6px 4px; }

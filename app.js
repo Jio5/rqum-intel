@@ -549,6 +549,27 @@
     return myFigures.stats;
   };
 
+  // ---- War Room tab (RQUM.warRoomView) ----------------------------------------------------
+  async function renderWarRoomTab(body) {
+    body.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
+    let war;
+    try { war = await call('rqum_war_clan'); } catch (err) {
+      body.replaceChildren(el('p', 'rqum-muted', err.message));
+      return;
+    }
+    const [tgo, clan, bounties, me] = await Promise.all([call('rqum_clan', { p_clan: 'TGO' }).catch(() => []), call('rqum_alliance').catch(() => []),
+      call('rqum_bounties').catch(() => []), rpc('rqum_me').catch(() => null)]);
+    const ids = (rows) => new Set((rows || []).map((p) => String(p.player_id)));
+    // Leaders set bounties here too (the admin key is only in the extension).
+    body.replaceChildren(RQUM.warRoomView({ members: war || [], tgo: ids(tgo), clan: ids(clan), bounties: bounties || [], canSet: !!me?.officer }, {
+      search: (q) => call('rqum_search_players', { p_query: q }),
+      bountyCreate: (id, name, hours, note) => call('rqum_bounty_create', { p_target_id: Number(id), p_name: name || null, p_hours: hours, p_note: note || null }),
+      bountyCancel: (id) => call('rqum_bounty_cancel', { p_id: Number(id) }),
+      reload: () => renderWarRoomTab(body),
+      error: (m) => setStatus(m, true),
+    }));
+  }
+
   // ---- Active Time tab (RQUM.activeView) ------------------------------------------------
   async function renderActiveTab(body) {
     body.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
@@ -685,7 +706,7 @@
     body.replaceChildren(el('p', 'rqum-muted', 'Your manual entries that are still the latest value: correct a mistake, the date stays the same.'), list);
   }
 
-  const TABS = { search: renderSearchTab, recent: renderRecentTab, alliance: renderAllianceTab, tgo: (body) => renderAllianceTab(body, 'TGO'), ranking: renderRankingTab, clans: renderClansTab, add: renderAddTab, mine: renderMineTab, ffa: renderFfaTab, leaderboards: renderLeaderboardTab, hitlist: renderHitListTab, daily: renderDailyTab, mass: renderMassTab, active: renderActiveTab };
+  const TABS = { search: renderSearchTab, recent: renderRecentTab, alliance: renderAllianceTab, tgo: (body) => renderAllianceTab(body, 'TGO'), ranking: renderRankingTab, clans: renderClansTab, add: renderAddTab, mine: renderMineTab, ffa: renderFfaTab, leaderboards: renderLeaderboardTab, hitlist: renderHitListTab, daily: renderDailyTab, mass: renderMassTab, active: renderActiveTab, warroom: renderWarRoomTab };
 
   // A computer shows the big layout (as the extension's ⤢ window) right in the page, every
   // tab; a phone shows the small window's layout, one tab at a time.

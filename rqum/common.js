@@ -1428,15 +1428,10 @@ RQUM.massView = (data, opts = {}) => {
     const fullCap = army ? Math.min(MASS_DAY_CAP, army * 0.05) : MASS_DAY_CAP;
 
     // One mass: attacks per member (attacksOf), who assassinates / sabotages, what was already done.
-    // With their fort's maximum HP: played hit by hit, the fort going down (their protection going
-    // up): the sabotages first (biggest Siege Workshops first), then the attacks in turns.
-    // One mass: attacks per member (attacksOf), who assassinates / sabotages, what was already done.
-    // Played hit by hit in the best order, kept as the plan (steps):
-    // 1. the sabotages, biggest Siege Workshops first (each next one does less);
-    // 2. the attacks, the members who hit the fort hardest first (offense ÷ defense up to 2, × their
-    //    workshop bonus), each making all theirs: the fort falls sooner, so every later attack kills
-    //    more (their protection going up); without the fort's maximum HP, best ratio first;
-    // 3. the assassinations (they do not depend on the fort).
+    // Played hit by hit in the best order, kept as the plan (steps): 1. the sabotages, biggest Siege
+    // Workshops first (each next one does less); 2. the attacks that win, ordered below; 3. the
+    // assassinations (they do not depend on the fort). (The Discord bot's /mass does the same:
+    // supabase/functions/rqum-discord/mass.ts, keep both in step.)
     function simulate(attacksOf, assassins, saboteurs, before) {
       const steps = [];
       let hp = fortMax ? fortMax * ((num(st, 'fort_pct') ?? 100) / 100) : null;
@@ -1814,6 +1809,338 @@ RQUM.activeView = (data, opts = {}) => {
       list.appendChild(row);
     }
     if (!rows.length) list.appendChild(el('p', 'rqum-muted', 'No action known for these players in this period.'));
+  }
+  draw();
+  return wrap;
+};
+
+// ---- War Room tab: the TGO tally of the day, records, who gets farmed ------------------------
+// From the members' war statistics (rqum_war_clan: each member's Battle Logs and spy logs read by
+// their RQUM, by the hour; their best single battles). Days are the viewer's own days.
+// data: { members: rows of rqum_war_clan, tgo: Set of TGO ids, clan: Set of RQUM member ids }.
+const WAR_KEY = 'rqumWarRoom2';
+RQUM.warRoomView = (data, opts = {}) => {
+  let state = { part: 'tally', tgo: true, days: 1 };
+  try { state = { ...state, ...JSON.parse(localStorage.getItem(WAR_KEY) || '{}') }; } catch (_) { /* storage off */ }
+  const members = data.members || [];
+  const isTgo = (pid) => data.tgo?.has(String(pid));
+  const localDay = (h) => {
+    const d = new Date(`${h}:00:00Z`);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const todayKey = localDay(new Date().toISOString().slice(0, 13));
+  const n = (v) => RQUM.formatNumber(Math.round(v || 0));
+  const x = (v) => RQUM.formatExact(Math.round(v || 0));
+  const name = (m) => m.name || `#${m.player_id}`;
+  const bars = (title, rows, fmt = n) => {
+    const b = el('div', 'rqum-hit__bars');
+    b.appendChild(el('div', 'rqum-hit__chart-title', title));
+    const max = Math.max(1, ...rows.map((r) => r.v));
+    for (const r of rows) {
+      const line = el('div', 'rqum-hit__bar');
+      const track = el('span', 'rqum-hit__bar-track');
+      const fill = el('span', 'rqum-hit__bar-fill');
+      fill.style.width = `${Math.max(2, (r.v / max) * 100)}%`;
+      track.appendChild(fill);
+      line.title = r.title || `${r.name}: ${x(r.v)}`;
+      line.append(el('span', 'rqum-hit__bar-name', r.name), track, el('span', 'rqum-hit__bar-v', fmt(r.v)));
+      b.appendChild(line);
+    }
+    if (!rows.length) b.appendChild(el('p', 'rqum-muted', 'Nothing yet.'));
+    return b;
+  };
+  const tiles = (items) => {
+    const t = el('div', 'rqum-hit__tiles');
+    for (const [label, value, title, color] of items) {
+      const tile = el('div', 'rqum-hit__tile');
+      tile.title = title || '';
+      const v = el('strong', '', value);
+      if (color) v.style.color = color;
+      tile.append(el('span', 'rqum-hit__tile-label', label), v);
+      t.appendChild(tile);
+    }
+    return t;
+  };
+
+  // Each member's figures by local day: what they did (attacked) and what they took (attackers).
+  // opponent filter: TGO only or everyone.
+  function byDay(m, onlyTgo) {
+    const days = {};
+    const day = (d) => (days[d] ??= { attacks: 0, wins: 0, gold: 0, killed: 0, lost: 0, assassinated: 0, sabotages: 0, hitsIn: 0, goldLost: 0, lostIn: 0, killedIn: 0 });
+    for (const [pid, p] of Object.entries(m.stats?.attacked || {})) {
+      if (onlyTgo && !isTgo(pid)) continue;
+      for (const [h, v] of Object.entries(p.hours || {})) {
+        const o = day(localDay(h));
+        o.attacks += v.attacks || 0; o.wins += v.wins || 0; o.gold += v.gold || 0; o.killed += v.killed || 0; o.lost += v.lost || 0;
+        o.assassinated += v.assassinated || 0; o.sabotages += v.sabotages || 0;
+      }
+    }
+    // Their attacks on us: "killed" = our units they killed, "lost" = theirs we killed defending.
+    for (const [pid, p] of Object.entries(m.stats?.attackers || {})) {
+      if (onlyTgo && !isTgo(pid)) continue;
+      for (const [h, v] of Object.entries(p.hours || {})) {
+        const o = day(localDay(h));
+        o.hitsIn += v.attacks || 0; o.goldLost += v.gold || 0; o.lostIn += v.killed || 0; o.killedIn += v.lost || 0;
+      }
+    }
+    return days;
+  }
+
+  const wrap = el('div', 'rqum-war-room');
+  // The parts and the periods as the Ranking tab's buttons.
+  const bar = el('div', 'rqum-war-room__bar');
+  const parts = el('div', 'rqum-ranking__tabs');
+  for (const [k, label] of [['tally', '⚔️ TGO today'], ['bounties', '🎯 Bounties'], ['records', '🏆 Records'], ['farmed', '🌾 Farmed']]) {
+    const b = el('button', '', label);
+    b.type = 'button';
+    b.dataset.p = k;
+    b.addEventListener('click', () => { state.part = k; draw(); });
+    parts.appendChild(b);
+  }
+  const tgoBox = el('input');
+  tgoBox.type = 'checkbox';
+  tgoBox.addEventListener('change', () => { state.tgo = tgoBox.checked; draw(); });
+  const tgoLabel = el('label', 'rqum-daily__tgo');
+  tgoLabel.append(tgoBox, ' TGO only');
+  const days = el('div', 'rqum-ranking__tabs rqum-war-room__days');
+  for (const [d, label] of [[1, '1 day'], [7, '7 days'], [30, '30 days'], [0, 'All time']]) {
+    const b = el('button', '', label);
+    b.type = 'button';
+    b.dataset.d = String(d);
+    b.title = d ? `The last ${d === 1 ? '24 hours' : `${d} days`}` : 'Everything RQUM has read';
+    b.addEventListener('click', () => { state.days = d; draw(); });
+    days.appendChild(b);
+  }
+  bar.append(parts, days, tgoLabel);
+  const view = el('div');
+  wrap.append(bar, view);
+  wrap.appendChild(el('p', 'rqum-muted rqum-daily__note', 'From each member\'s Battle Logs and spy logs, read by their RQUM (every 30 min while the game is open): members without RQUM are missing. Days are your own days (midnight to midnight).'));
+
+  // ⚔️ The TGO tally of the day, the days before as a chart, and today's members.
+  function tally() {
+    const perDay = {};
+    const today = [];
+    for (const m of members) {
+      const d = byDay(m, true);
+      for (const [k, o] of Object.entries(d)) {
+        const t = (perDay[k] ??= { attacks: 0, wins: 0, gold: 0, killed: 0, lost: 0, assassinated: 0, sabotages: 0, hitsIn: 0, goldLost: 0, lostIn: 0, killedIn: 0 });
+        for (const f of Object.keys(t)) t[f] += o[f];
+      }
+      if (d[todayKey]) today.push({ m, o: d[todayKey] });
+    }
+    const t = perDay[todayKey] || { attacks: 0, wins: 0, gold: 0, killed: 0, lost: 0, assassinated: 0, sabotages: 0, hitsIn: 0, goldLost: 0, lostIn: 0, killedIn: 0 };
+    const kills = t.killed + t.killedIn + t.assassinated;
+    const losses = t.lost + t.lostIn;
+    const out = [el('div', 'rqum-hit__chart-title', `⚔️ Against TGO today (${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })})`)];
+    out.push(tiles([
+      ['Attacks', `${t.wins}W / ${t.attacks}`, 'Our attacks on TGO, won / total'],
+      ['TGO units killed', n(kills), `${x(t.killed)} in our attacks, ${x(t.killedIn)} defending, ${x(t.assassinated)} assassinated`, '#22c55e'],
+      ['Our units lost', n(losses), `${x(t.lost)} in our attacks, ${x(t.lostIn)} in theirs`, '#ef4444'],
+      ['K/D', losses ? (kills / losses).toFixed(2) : kills ? '∞' : '—', 'TGO units killed ÷ our units lost', kills >= losses ? '#22c55e' : '#ef4444'],
+      ['Gold taken', n(t.gold), `Gold we looted from TGO: ${x(t.gold)}`, '#facc15'],
+      ['Gold lost', n(t.goldLost), `Gold TGO looted from us: ${x(t.goldLost)}`, '#ef4444'],
+      ['Their attacks', String(t.hitsIn), 'TGO attacks on us today'],
+      ['Sabotages', String(t.sabotages), 'Our successful sabotages on TGO today'],
+    ]));
+    // Day by day: TGO units killed (our attacks, defending, assassinations), the last 30 days.
+    let run = 0;
+    const keys = Object.keys(perDay).sort().slice(-30);
+    const series = keys.map((k) => ({ hour: `${k}T12:00:00`, v: (run += perDay[k].killed + perDay[k].killedIn + perDay[k].assassinated) }));
+    const chart = el('div', 'rqum-hit__chart');
+    chart.append(el('div', 'rqum-hit__chart-title', 'TGO units killed, day by day (added up)'), RQUM.historyChart(series));
+    out.push(chart);
+    out.push(bars('🏅 Today against TGO: units killed by member', today.map(({ m, o }) => ({ name: name(m), v: o.killed + o.killedIn + o.assassinated, title: `${name(m)}: ${x(o.killed)} in attacks, ${x(o.killedIn)} defending, ${x(o.assassinated)} assassinated; ${o.wins}W / ${o.attacks} attacks, ${x(o.gold)} gold` })).filter((r) => r.v).sort((a, b) => b.v - a.v)));
+    return out;
+  }
+
+  // 🎯 Bounties: running ones (live ranking, time left) and the last ones; a leader or the admin
+  // sets one (a player, 6 / 12 / 24 h, a note) and may cancel a running one.
+  function bounties() {
+    const out = [];
+    if (data.canSet && opts.bountyCreate) {
+      const form = el('form', 'rqum-hit__add');
+      const input = el('input');
+      input.placeholder = 'Set a bounty: player name';
+      input.autocomplete = 'off';
+      const hours = el('select');
+      for (const h of [6, 12, 24]) hours.appendChild(new Option(`${h} h`, String(h)));
+      hours.value = '12';
+      const note = el('input', 'rqum-hit__note');
+      note.placeholder = 'Note (optional)';
+      note.maxLength = 200;
+      const found = el('ul', 'rqum-list rqum-hit__found');
+      let ticket = 0;
+      let timer = null;
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+          const q = input.value.trim();
+          const mine = ++ticket;
+          found.replaceChildren();
+          if (q.length < 2) return;
+          const rows = await opts.search(q).catch(() => []);
+          if (mine !== ticket) return;
+          for (const p of (rows || []).slice(0, 8)) {
+            const li = el('li', 'rqum-list__item');
+            const b = el('button', 'rqum-link-btn', RQUM.withClan(p.player_name || `#${p.player_id}`, p.clan));
+            b.type = 'button';
+            b.addEventListener('click', async () => {
+              if (!confirm(`Set a ${hours.value} h bounty on ${p.player_name}? It is announced on Discord.`)) return;
+              try { await opts.bountyCreate(p.player_id, p.player_name, Number(hours.value), note.value); } catch (err) { return opts.error?.(err.message); }
+              RQUM.toast?.(`🎯 Bounty on ${p.player_name} for ${hours.value} h`);
+              opts.reload?.();
+            });
+            li.appendChild(b);
+            found.appendChild(li);
+          }
+          if (!found.children.length) found.appendChild(el('li', 'rqum-muted', 'Nobody found in the RQUM database.'));
+        }, 300);
+      });
+      form.addEventListener('submit', (e) => e.preventDefault());
+      form.append(input, hours, note);
+      out.push(form, found);
+    }
+    const list = data.bounties || [];
+    if (!list.length) out.push(el('p', 'rqum-muted', data.canSet ? 'No bounty yet: set one above.' : 'No bounty yet: the leaders set them.'));
+    for (const b of list) {
+      const box = el('div', `rqum-bounty${b.ended ? ' is-ended' : ''}`);
+      const head = el('div', 'rqum-bounty__head');
+      const who = el('strong', '', `🎯 ${b.target_name || `#${b.target_id}`}`);
+      const left = Date.parse(b.ends_at) - Date.now();
+      const time = b.ended
+        ? `ended ${new Date(b.ends_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+        : left > 0 ? `${Math.floor(left / 3600000)}h${String(Math.floor((left % 3600000) / 60000)).padStart(2, '0')} left` : 'ending (final ranking soon)';
+      head.append(who, el('span', 'rqum-muted', ` · ${time} · set by ${b.created_by || '?'}`));
+      if (!b.ended && data.canSet && opts.bountyCancel) {
+        const x = el('button', 'rqum-link-btn', '✕');
+        x.type = 'button';
+        x.title = 'Cancel this bounty';
+        x.addEventListener('click', async () => {
+          if (!confirm(`Cancel the bounty on ${b.target_name}?`)) return;
+          try { await opts.bountyCancel(b.id); } catch (err) { return opts.error?.(err.message); }
+          opts.reload?.();
+        });
+        head.appendChild(x);
+      }
+      box.appendChild(head);
+      if (b.note) box.appendChild(el('div', 'rqum-hit__notetext', `📝 ${b.note}`));
+      const res = Array.isArray(b.results) ? b.results : [];
+      if (!res.length) box.appendChild(el('p', 'rqum-muted', 'No hit yet (members\' logs are read every 30 minutes).'));
+      else {
+        const t = el('table', 'rqum-hit__table');
+        const h = el('tr');
+        ['', 'Member', 'Killed', 'Gold', 'Attacks'].forEach((c) => h.appendChild(el('th', '', c)));
+        t.appendChild(el('thead')).appendChild(h);
+        const tb = t.appendChild(el('tbody'));
+        res.forEach((r, i) => {
+          const tr = el('tr');
+          tr.append(el('td', '', ['🥇', '🥈', '🥉'][i] || String(i + 1)), el('td', '', r.name || `#${r.player_id}`), el('td', '', n(r.killed)), el('td', '', n(r.gold)), el('td', '', `${r.wins ?? 0}W / ${r.attacks ?? 0}`));
+          tb.appendChild(tr);
+        });
+        box.appendChild(t);
+      }
+      out.push(box);
+    }
+    out.push(el('p', 'rqum-muted rqum-daily__note', 'Most units killed wins (then gold), from the members\' Battle Logs read by their RQUM, to the hour. Announced on Discord when it starts and when it ends (about 35 minutes after, once everyone\'s last hits are read).'));
+    return out;
+  }
+
+  // 🏆 Records: the best day of each member (K/D, gold, kills) and the best single battles.
+  function records() {
+    const from = state.days ? new Date(Date.now() - state.days * 86400000) : null;
+    const fromKey = from ? `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}` : '';
+    const dayRec = { kd: [], gold: [], kills: [] };
+    const battleRec = { kills: [], gold: [] };
+    for (const m of members) {
+      for (const [k, o] of Object.entries(byDay(m, state.tgo))) {
+        if (k < fromKey) continue;
+        const kills = o.killed + o.killedIn;
+        const losses = o.lost + o.lostIn;
+        const label = new Date(`${k}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        // A K/D needs some fighting to mean something: 5 attacks or more that day.
+        if (o.attacks >= 5) dayRec.kd.push({ name: `${name(m)} · ${label}`, v: losses ? kills / losses : kills, title: `${name(m)}, ${label}: ${x(kills)} killed / ${x(losses)} lost in ${o.attacks} attacks` });
+        dayRec.gold.push({ name: `${name(m)} · ${label}`, v: o.gold, title: `${name(m)}, ${label}: ${x(o.gold)} gold in ${o.attacks} attacks` });
+        dayRec.kills.push({ name: `${name(m)} · ${label}`, v: kills, title: `${name(m)}, ${label}: ${x(kills)} units killed` });
+      }
+      // Single battles: the last ones kept with each opponent (their 10 latest), and the best ones
+      // kept since 1.2.1 (stats.best, from 1.3.0).
+      const seen = new Set();
+      const consider = (pid, pname, ev) => {
+        if (!ev?.at || (state.tgo && !isTgo(pid)) || (from && Date.parse(ev.at) < from.getTime())) return;
+        const key = `${pid}|${ev.at}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const when = new Date(ev.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        battleRec.kills.push({ name: `${name(m)} → ${pname}`, v: ev.killed || 0, title: `${name(m)} attacked ${pname} on ${when}: ${x(ev.killed)} units killed, ${x(ev.gold)} gold` });
+        battleRec.gold.push({ name: `${name(m)} → ${pname}`, v: ev.gold || 0, title: `${name(m)} attacked ${pname} on ${when}: ${x(ev.gold)} gold, ${x(ev.killed)} units killed` });
+      };
+      for (const [pid, p] of Object.entries(m.stats?.attacked || {})) for (const ev of p.recent || []) consider(pid, p.name || `#${pid}`, ev);
+      for (const b of Object.values(m.stats?.best || {})) consider(b.player, b.name || `#${b.player}`, b);
+    }
+    const top = (list) => list.filter((r) => r.v).sort((a, b) => b.v - a.v).slice(0, 10);
+    const two = el('div', 'rqum-hit__two');
+    two.append(
+      bars('📈 Best K/D in a day (5 attacks or more)', top(dayRec.kd), (v) => v.toFixed(2)),
+      bars('💰 Most gold stolen in a day', top(dayRec.gold)),
+      bars('☠️ Most units killed in a day', top(dayRec.kills)),
+      bars('⚔️ Most kills in a single battle', top(battleRec.kills)),
+      bars('🪙 Most gold in a single battle', top(battleRec.gold)),
+    );
+    return [two, el('p', 'rqum-muted rqum-daily__note', 'Single battles: each member\'s latest battles with each opponent, and their best battles kept by RQUM from 1.3.0 on.')];
+  }
+
+  // 🌾 Farmed: the members attacked the most and by whom; the players we farm the most.
+  function farmed() {
+    const from = state.days ? new Date(Date.now() - state.days * 86400000).toISOString().slice(0, 13) : '';
+    const victims = [];
+    const farmedByUs = {};
+    for (const m of members) {
+      const by = {};
+      let hits = 0;
+      let gold = 0;
+      let lost = 0;
+      for (const [pid, p] of Object.entries(m.stats?.attackers || {})) {
+        if (state.tgo && !isTgo(pid)) continue;
+        for (const [h, v] of Object.entries(p.hours || {})) {
+          if (h < from) continue;
+          hits += v.attacks || 0; gold += v.gold || 0; lost += v.killed || 0;
+          const o = (by[pid] ??= { name: p.name || `#${pid}`, hits: 0, gold: 0 });
+          o.hits += v.attacks || 0; o.gold += v.gold || 0;
+        }
+      }
+      if (hits) {
+        const worst = Object.values(by).sort((a, b) => b.hits - a.hits).slice(0, 3);
+        victims.push({ name: name(m), v: hits, title: `${name(m)}: ${hits} attacks taken, ${x(gold)} gold lost, ${x(lost)} units lost\nBy: ${worst.map((w) => `${w.name} (${w.hits}, ${n(w.gold)} gold)`).join(', ')}` });
+      }
+      for (const [pid, p] of Object.entries(m.stats?.attacked || {})) {
+        if (state.tgo && !isTgo(pid)) continue;
+        for (const [h, v] of Object.entries(p.hours || {})) {
+          if (h < from) continue;
+          const o = (farmedByUs[pid] ??= { name: p.name || `#${pid}`, v: 0, gold: 0, by: {} });
+          o.v += v.attacks || 0; o.gold += v.gold || 0;
+          o.by[name(m)] = (o.by[name(m)] || 0) + (v.attacks || 0);
+        }
+      }
+    }
+    const ours = Object.values(farmedByUs).filter((r) => r.v).sort((a, b) => b.v - a.v).slice(0, 15)
+      .map((r) => ({ name: r.name, v: r.v, title: `${r.name}: ${r.v} of our attacks, ${x(r.gold)} gold\nBy: ${Object.entries(r.by).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, c]) => `${k} (${c})`).join(', ')}` }));
+    const two = el('div', 'rqum-hit__two');
+    two.append(
+      bars('🌾 Our members farmed the most (attacks taken; hover: by whom)', victims.sort((a, b) => b.v - a.v).slice(0, 15), (v) => String(v)),
+      bars('🚜 The players we farm the most (our attacks; hover: by whom)', ours, (v) => String(v)),
+    );
+    return [two];
+  }
+
+  function draw() {
+    try { localStorage.setItem(WAR_KEY, JSON.stringify(state)); } catch (_) { /* storage off */ }
+    parts.querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b.dataset.p === state.part));
+    days.querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b.dataset.d === String(state.days)));
+    tgoBox.checked = state.tgo;
+    // The TGO tally is always TGO and today; the bounties have their own times.
+    tgoLabel.hidden = state.part === 'tally' || state.part === 'bounties';
+    days.hidden = state.part === 'tally' || state.part === 'bounties';
+    view.replaceChildren(...(state.part === 'tally' ? tally() : state.part === 'bounties' ? bounties() : state.part === 'records' ? records() : farmed()));
   }
   draw();
   return wrap;
