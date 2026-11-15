@@ -125,9 +125,11 @@
       const m = txt(item.querySelector('.rank-value')).match(/#(\d+)/);
       if (label && m) put(stats, `rank ${label}`, Number(m[1]));
     });
-    // "Fort HP 0 / 1,850 (0%)": only the % is kept.
+    // "Fort HP 0 / 1,850 (0%)": the % and the maximum HP (Mass tab).
     const fort = parseValue(txt(page.querySelector('.fort-hp-bar [data-pf-pct]')));
     if (typeof fort === 'number') put(stats, 'fort_pct', fort);
+    const fortMax = txt(page.querySelector('.fort-hp-bar .fort-hp-text')).match(/\/\s*([\d,]+)/);
+    if (fortMax) put(stats, 'fort_max', Number(fortMax[1].replace(/,/g, '')));
     return [observation(id, txt(page.querySelector('.profile-title h2')).slice(0, 60) || null, 'profile', stats)];
   }
 
@@ -160,6 +162,8 @@
     buildings: 'report_buildings', battle_upgrades: 'report_upgrades',
   };
 
+  const BUILDING_STATS = { siege_workshop: 'siege_workshop', spy_academy: 'spy_academy' };
+
   function fromSpyReport(doc) {
     const page = [...doc.querySelectorAll('.intel-report-page')].find((p) => !p.matches(FOREIGN) && p.querySelector('.intel-sections'));
     if (!page) return [];
@@ -172,6 +176,12 @@
       const title = txt(section.querySelector(':scope > h3'));
       section.querySelectorAll('.intel-item').forEach((item) => {
         const label = txt(item.querySelector('.intel-label'));
+        // "Fort HP 1,850 / 1,850": the % and the maximum HP (Mass tab).
+        const hp = /^fort hp$/i.test(label) && txt(item.querySelector('.intel-value')).replace(/,/g, '').match(/(\d+)\s*\/\s*(\d+)/);
+        if (hp && Number(hp[2])) {
+          put(stats, 'fort_max', Number(hp[2]));
+          put(stats, 'fort_pct', Math.round((Number(hp[1]) / Number(hp[2])) * 1000) / 10);
+        }
         // Same label in two sections: keep both, prefixed by the section.
         put(stats, normKey(label) in stats ? `${title} ${label}` : label, valueOf(item.querySelector('.intel-value')));
       });
@@ -213,6 +223,11 @@
       });
       if (rows.length) stats[key] = rows;
     });
+    // Siege Workshop and Spy Academy levels as figures too (Mass tab: fort damage, assassinations).
+    for (const b of stats.report_buildings || []) {
+      const k = BUILDING_STATS[normKey(b.building || '')];
+      if (k && typeof b.level === 'number') stats[k] = b.level;
+    }
 
     const name = playerName(link);
     return [observation(id, name && !/profile|view|attack|spy|message/i.test(name) ? name : null, 'recon', stats,
@@ -422,6 +437,11 @@
     // Game header: level on every page.
     doc.querySelectorAll('.game-header .stat-item').forEach((item) => {
       if (/^level$/i.test(txt(item.querySelector('.stat-label')))) read('level', item.querySelector('.stat-value'));
+      // Turns (Mass tab: the attacks a member can still make).
+      if (/^turns$/i.test(txt(item.querySelector('.stat-label')))) {
+        const t = Number(txt(item.querySelector('.stat-value')).replace(/[^\d]/g, ''));
+        if (Number.isFinite(t) && !('turns' in stats)) stats.turns = t;
+      }
     });
     // Dashboard (/game): "Combat Power" boxes (Offense, Defense, Spy Offense, Spy Defense),
     // the level badge and the stat tiles (Wealth...); Attack page: "Your Stats";
@@ -467,6 +487,17 @@
       // Gold ratio: gold plundered ÷ gold lost this season (2 decimals).
       if (stats.gold_plundered > 0 && stats.gold_lost > 0) stats.gold_ratio = Math.round(stats.gold_plundered / stats.gold_lost * 100) / 100;
     }
+    // My Buildings page: the Siege Workshop and Spy Academy levels ("4/10"), and the workshop's
+    // own "+14% Fort Damage" (Mass tab).
+    doc.querySelectorAll('.bld-card').forEach((card) => {
+      if (card.closest(NOT_MINE)) return;
+      const k = BUILDING_STATS[normKey(txt(card.querySelector('.bld-name')))];
+      const lvl = Number((txt(card.querySelector('.bld-dots-label')).match(/^(\d+)\s*\//) || [])[1]);
+      if (!k || !Number.isFinite(lvl) || k in stats) return;
+      stats[k] = lvl;
+      const pct = txt(card.querySelector('.bld-now .bld-effect-final')).match(/\+\s*(\d+(?:\.\d+)?)\s*%\s*fort damage/i);
+      if (k === 'siege_workshop') stats.siege_bonus = pct ? Number(pct[1]) : 0;
+    });
     // My own profile: level, gold, army, population, clan.
     if (playerIdFromUrl(loc.pathname) === me) {
       for (const [k, v] of Object.entries(fromProfile(doc, loc)[0]?.stats || {})) if (!(k in stats)) stats[k] = v;

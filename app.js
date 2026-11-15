@@ -538,6 +538,72 @@
     ));
   }
 
+  // My own figures for the cards' ratios: my line of the clan (the web page knows my name only).
+  let myFigures = null;
+  RQUM.myFigures = async () => {
+    if (myFigures && Date.now() - myFigures.at < 5 * 60000) return myFigures.stats;
+    const [me, clan] = await Promise.all([rpc('rqum_me').catch(() => null), call('rqum_alliance').catch(() => [])]);
+    const key = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const row = (clan || []).find((p) => key(p.player_name) === key(me?.name));
+    myFigures = { at: Date.now(), stats: row?.stats || null };
+    return myFigures.stats;
+  };
+
+  // ---- Active Time tab (RQUM.activeView) ------------------------------------------------
+  async function renderActiveTab(body) {
+    body.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
+    let war;
+    try { war = await call('rqum_war_clan'); } catch (err) {
+      body.replaceChildren(el('p', 'rqum-muted', err.message));
+      return;
+    }
+    const [tgo, clan] = await Promise.all([call('rqum_clan', { p_clan: 'TGO' }).catch(() => []), call('rqum_alliance').catch(() => [])]);
+    const ids = (rows) => new Set((rows || []).map((p) => String(p.player_id)));
+    const card = el('div', 'rqum-hit__card');
+    const pick = async (id) => {
+      const p = (await call('rqum_get_players', { p_player_ids: [Number(id)] }).catch(() => []))?.[0];
+      const close = el('button', 'rqum-link-btn', '✕ Close');
+      close.type = 'button';
+      close.addEventListener('click', () => card.replaceChildren());
+      card.replaceChildren(close, p ? RQUM.intelCard(p) : el('p', 'rqum-muted', 'No stats yet.'));
+    };
+    body.replaceChildren(card, RQUM.activeView({ members: war || [], tgo: ids(tgo), clan: ids(clan) }, { pick }));
+  }
+
+  // ---- Mass tab (RQUM.massView) ---------------------------------------------------------
+  async function renderMassTab(body) {
+    body.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
+    let tgo;
+    let clan;
+    let war;
+    try { [tgo, clan, war] = await Promise.all([call('rqum_clan', { p_clan: 'TGO' }), call('rqum_alliance'), call('rqum_war_clan').catch(() => [])]); } catch (err) {
+      body.replaceChildren(el('p', 'rqum-muted', err.message));
+      return;
+    }
+    const card = el('div', 'rqum-hit__card');
+    const pick = async (id) => {
+      const p = (await call('rqum_get_players', { p_player_ids: [Number(id)] }).catch(() => []))?.[0];
+      const close = el('button', 'rqum-link-btn', '✕ Close');
+      close.type = 'button';
+      close.addEventListener('click', () => card.replaceChildren());
+      card.replaceChildren(close, p ? RQUM.intelCard(p) : el('p', 'rqum-muted', 'No stats yet.'));
+      card.scrollIntoView({ block: 'nearest' });
+    };
+    body.replaceChildren(card, RQUM.massView({ targets: tgo || [], members: clan || [], war: war || [] }, { pick }));
+  }
+
+  // ---- 24h tab (RQUM.dailyView) ----------------------------------------------------------
+  async function renderDailyTab(body) {
+    body.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
+    let members;
+    try { members = await call('rqum_war_clan'); } catch (err) {
+      body.replaceChildren(el('p', 'rqum-muted', err.message));
+      return;
+    }
+    const [tgo, me] = await Promise.all([call('rqum_clan', { p_clan: 'TGO' }).catch(() => []), rpc('rqum_me').catch(() => null)]);
+    body.replaceChildren(RQUM.dailyView({ members: members || [], tgo: new Set((tgo || []).map((p) => String(p.player_id))), me: me?.name }));
+  }
+
   // ---- FFA tab -----------------------------------------------------------------------
   async function renderFfaTab(body) {
     body.replaceChildren(el('p', 'rqum-muted', 'Loading…'));
@@ -619,7 +685,7 @@
     body.replaceChildren(el('p', 'rqum-muted', 'Your manual entries that are still the latest value: correct a mistake, the date stays the same.'), list);
   }
 
-  const TABS = { search: renderSearchTab, recent: renderRecentTab, alliance: renderAllianceTab, tgo: (body) => renderAllianceTab(body, 'TGO'), ranking: renderRankingTab, clans: renderClansTab, add: renderAddTab, mine: renderMineTab, ffa: renderFfaTab, leaderboards: renderLeaderboardTab, hitlist: renderHitListTab };
+  const TABS = { search: renderSearchTab, recent: renderRecentTab, alliance: renderAllianceTab, tgo: (body) => renderAllianceTab(body, 'TGO'), ranking: renderRankingTab, clans: renderClansTab, add: renderAddTab, mine: renderMineTab, ffa: renderFfaTab, leaderboards: renderLeaderboardTab, hitlist: renderHitListTab, daily: renderDailyTab, mass: renderMassTab, active: renderActiveTab };
 
   // A computer shows the big layout (as the extension's ⤢ window) right in the page, every
   // tab; a phone shows the small window's layout, one tab at a time.

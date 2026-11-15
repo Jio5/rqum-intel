@@ -917,3 +917,74 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-hit__about { font-size: 11px; color: #9aa0b5; }
 .rqum-hit__about summary { cursor: pointer; }
 .rqum-hit__about p { margin: 3px 0 0; }
+/* Battle totals as one compact table (both ways), whatever the window. */
+table.rqum-bt { display: table; width: 100%; border-collapse: collapse; font-size: 12px; margin: 4px 0 6px; font-variant-numeric: tabular-nums; }
+table.rqum-bt th, table.rqum-bt td { padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,.06); white-space: nowrap; }
+table.rqum-bt thead th { font-size: 10px; color: #9aa0b5; text-transform: uppercase; letter-spacing: .03em; font-weight: 600; text-align: right; }
+table.rqum-bt tbody th { text-align: left; font-weight: 500; color: #c9c5b8; }
+table.rqum-bt td { text-align: right; font-weight: 700; cursor: help; }
+table.rqum-bt .rqum-bt__unknown { color: #6b7080; font-weight: 400; }
+table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 0; padding-top: 4px; }
+/* 24h tab (common.js, RQUM.dailyView). */
+.rqum-daily__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; }
+.rqum-daily__who { max-width: 160px; }
+.rqum-daily__tgo { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
+.rqum-daily .rqum-hit__tiles { margin-bottom: 8px; }
+.rqum-daily__tile { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.rqum-daily__tile.is-on { border-color: var(--rqum-accent, #d4a24c); box-shadow: 0 0 0 1px var(--rqum-accent, #d4a24c) inset; }
+.rqum-daily__note { font-size: 11px; margin-top: 6px; }
+/* Mass tab (common.js, RQUM.massView). */
+.rqum-mass__intro { font-size: 11px; margin: 0 0 6px; }
+.rqum-mass__table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rqum-mass__table > thead th { font-size: 10px; color: #9aa0b5; text-transform: uppercase; text-align: right; padding: 3px 6px; cursor: help; }
+.rqum-mass__table > thead th:first-child { text-align: left; }
+.rqum-mass__row { cursor: pointer; }
+.rqum-mass__row > td { padding: 3px 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,.06); white-space: nowrap; }
+.rqum-mass__row > td.rqum-mass__name { text-align: left; }
+.rqum-mass__row:hover > td { background: rgba(255,255,255,.03); }
+.rqum-mass__kills { font-weight: 700; color: #22c55e; }
+.rqum-mass .is-win { color: #22c55e; }
+.rqum-mass .is-loss { color: #ef4444; }
+.rqum-mass__detail > td { padding: 2px 0 8px 12px; }
+.rqum-mass__age { font-size: 10px; color: #9aa0b5; font-weight: 400; }
+.rqum-mass__age.is-old { color: #f59e0b; }
+.rqum-mass__ready { display: block; font-size: 10px; font-weight: 400; color: #9aa0b5; }
+.rqum-mass__plan { margin-top: 6px; font-size: 12px; }
+.rqum-mass__plan summary { cursor: pointer; color: var(--rqum-accent, #d4a24c); }
+.rqum-mass__plan ol { margin: 4px 0 0 18px; padding: 0; }
+.rqum-mass__plan li { margin: 2px 0; }
+.rqum-mass__cap { color: #f59e0b; }
+.rqum-mass__gauge { display: block; height: 4px; margin-top: 3px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+.rqum-mass__gauge-fill { display: block; height: 100%; background: #9aa0b5; }
+.rqum-mass__gauge.is-near .rqum-mass__gauge-fill { background: #f59e0b; }
+.rqum-mass__gauge.is-full .rqum-mass__gauge-fill { background: #22c55e; }
+.rqum-mass__gauge-text { display: block; font-size: 10px; font-weight: 400; color: #9aa0b5; }
+.rqum-mass__plan-end { margin: 4px 0 0; font-size: 11px; color: #9aa0b5; }
+.rqum-mass__plan-end.is-full { color: #22c55e; }
+.rqum-mass__missing { font-size: 12px; color: #fde68a; margin: 4px 0 8px; padding: 6px 10px; background: rgba(245,158,11,.14); border: 1px solid rgba(245,158,11,.55); border-left: 4px solid #f59e0b; border-radius: 6px; }
+.rqum-mass__missing strong { color: #fbbf24; }
+.rqum-mass__warn { margin-left: 6px; padding: 0 5px; font-size: 10px; font-weight: 700; color: #1a1205; background: #f59e0b; border-radius: 8px; cursor: help; }
+.rqum-mass__missing ul { margin: 2px 0 0 16px; padding: 0; }
+/* A player's card: my ratios with them (common.js, ratioLine). */
+.rqum-card__ratios { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; font-size: 11px; }
+.rqum-card__ratio { padding: 1px 6px; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; white-space: nowrap; cursor: help; }
+.rqum-card__ratio .is-win { color: #22c55e; }
+.rqum-card__ratio .is-loss { color: #ef4444; }
+/* Active Time tab (common.js, RQUM.activeView). */
+.rqum-active__list { display: flex; flex-direction: column; gap: 2px; }
+.rqum-active__row { display: grid; grid-template-columns: 110px 1fr 34px; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.rqum-active__row:hover:not(.rqum-active__legend) { background: rgba(255,255,255,.03); }
+.rqum-active__legend { cursor: default; }
+.rqum-active__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rqum-active__count { text-align: right; color: #9aa0b5; font-size: 11px; }
+.rqum-active__strip, .rqum-active__hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; }
+.rqum-active__hours span { font-size: 9px; color: #9aa0b5; }
+.rqum-active__strip .rqum-active__cell { height: 14px; border-radius: 2px; }
+.rqum-active__card { margin-bottom: 10px; padding: 8px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; }
+.rqum-active__head { display: flex; align-items: center; gap: 4px; }
+.rqum-active__head > button:last-child { margin-left: auto; }
+.rqum-active__name { font-weight: 700; }
+.rqum-active__usual { margin: 4px 0 6px; font-size: 12px; color: #fbbf24; }
+.rqum-active__grid { display: grid; grid-template-columns: 30px repeat(24, 1fr); gap: 2px; }
+.rqum-active__grid .rqum-active__cell { height: 16px; border-radius: 2px; cursor: help; }
+.rqum-active__hlabel, .rqum-active__dlabel { font-size: 9px; color: #9aa0b5; }
