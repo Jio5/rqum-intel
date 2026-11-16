@@ -597,7 +597,8 @@
     let tgo;
     let clan;
     let war;
-    try { [tgo, clan, war] = await Promise.all([call('rqum_clan', { p_clan: 'TGO' }), call('rqum_alliance'), call('rqum_war_clan').catch(() => [])]); } catch (err) {
+    let masses;
+    try { [tgo, clan, war, masses] = await Promise.all([call('rqum_clan', { p_clan: 'TGO' }), call('rqum_alliance'), call('rqum_war_clan').catch(() => []), call('rqum_masses').catch(() => null)]); } catch (err) {
       body.replaceChildren(el('p', 'rqum-muted', err.message));
       return;
     }
@@ -610,7 +611,13 @@
       card.replaceChildren(close, p ? RQUM.intelCard(p) : el('p', 'rqum-muted', 'No stats yet.'));
       card.scrollIntoView({ block: 'nearest' });
     };
-    body.replaceChildren(card, RQUM.massView({ targets: tgo || [], members: clan || [], war: war || [] }, { pick }));
+    body.replaceChildren(card, RQUM.massView({ targets: tgo || [], members: clan || [], war: war || [], masses }, {
+      pick,
+      massStart: (id, name, plan) => call('rqum_mass_start', { p_target_id: Number(id), p_name: name || null, p_plan: plan || null }),
+      massCancel: (id) => call('rqum_mass_cancel', { p_id: Number(id) }),
+      reload: () => renderMassTab(body),
+      error: (m) => setStatus(m, true),
+    }));
   }
 
   // ---- 24h tab (RQUM.dailyView) ----------------------------------------------------------

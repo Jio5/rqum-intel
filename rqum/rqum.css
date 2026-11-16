@@ -935,6 +935,41 @@ table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 
 .rqum-daily__note { font-size: 11px; margin-top: 6px; }
 /* Mass tab (common.js, RQUM.massView). */
 .rqum-mass__intro { font-size: 11px; margin: 0 0 6px; }
+.rqum-mass__mode { display: flex; align-items: center; gap: 2px; margin: 0 0 6px; font-size: 12px; cursor: pointer; }
+/* Mass tab: a box per member in a target's mass, the fewest members to reach the cap (common.js, RQUM.massView). */
+.rqum-mass__members th:first-child, .rqum-mass__members td:first-child { width: 18px; padding-right: 0; }
+.rqum-mass__members input { margin: 0; cursor: pointer; accent-color: var(--rqum-accent, #d4a24c); }
+.rqum-mass__members tr.is-out td:not(:first-child) { opacity: .4; text-decoration: line-through; }
+.rqum-mass__left { margin: 4px 0 0; font-size: 11px; color: #fbbf24; }
+.rqum-mass__fewest { margin: 8px 0 4px; padding: 6px 10px; font-size: 12px; background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.35); border-radius: 6px; }
+.rqum-mass__fewest strong { color: #86efac; }
+.rqum-mass__fewest-line { margin-top: 3px; }
+.rqum-mass__only { margin-left: 4px; padding: 0 7px; font: inherit; font-size: 11px; color: inherit; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.2); border-radius: 5px; cursor: pointer; }
+.rqum-mass__only:hover { background: rgba(255,255,255,.14); }
+/* Mass tab: 🚀 Start mass and 📜 Masses (common.js, RQUM.massReportsView). */
+.rqum-mass__start { margin: 8px 0 2px; font-size: 12px; }
+.rqum-mass__start-btn { padding: 3px 10px; font: inherit; font-weight: 600; color: #fff; background: #b91c1c; border: 1px solid #ef4444; border-radius: 6px; cursor: pointer; }
+.rqum-mass__start-btn:hover { background: #dc2626; }
+.rqum-mass__start-btn:disabled { opacity: .5; cursor: default; }
+.rqum-mass__reports { margin: 0 0 10px; padding: 4px 8px; font-size: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 6px; }
+.rqum-mass__reports > summary { cursor: pointer; font-weight: 600; color: var(--rqum-accent, #d4a24c); }
+.rqum-mass__running { display: flex; align-items: center; gap: 6px; margin: 6px 0; padding: 4px 8px; background: rgba(245,158,11,.1); border-left: 3px solid #f59e0b; border-radius: 4px; }
+.rqum-mass__report { margin: 6px 0; padding: 4px 8px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 6px; }
+.rqum-mass__report > summary { cursor: pointer; }
+.rqum-mass__report-when { margin: 6px 0 4px; }
+.rqum-mass__report-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; margin: 6px 0; }
+.rqum-mass__tile { display: flex; flex-direction: column; gap: 1px; padding: 5px 8px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 6px; font-size: 11px; }
+.rqum-mass__tile b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.rqum-mass__tile-label { color: #9aa0b5; }
+.rqum-mass__tile.is-near { border-color: rgba(245,158,11,.6); }
+.rqum-mass__tile.is-full { border-color: rgba(34,197,94,.7); background: rgba(34,197,94,.08); }
+.rqum-mass__report-plan { margin: 4px 0; }
+.rqum-mass__report-warn { margin: 4px 0; color: #fbbf24; }
+.rqum-mass__report-table { font-size: 12px; font-variant-numeric: tabular-nums; }
+.rqum-mass__timeline { margin-top: 6px; }
+.rqum-mass__timeline > summary { cursor: pointer; color: var(--rqum-accent, #d4a24c); }
+.rqum-mass__timeline ol { margin: 4px 0 0 18px; padding: 0; font-variant-numeric: tabular-nums; }
+.rqum-mass__timeline li.is-loss { color: #f87171; }
 .rqum-mass__table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .rqum-mass__table > thead th { font-size: 10px; color: #9aa0b5; text-transform: uppercase; text-align: right; padding: 3px 6px; cursor: help; }
 .rqum-mass__table > thead th:first-child { text-align: left; }
@@ -996,3 +1031,5 @@ table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 
 .rqum-war-room__bar .rqum-ranking__tabs { margin-bottom: 6px; }
 .rqum-war-room__days button { flex: 1 1 20%; }
 .rqum-war-room__bar .rqum-ranking__tabs button { flex: 1 1 22%; padding: 6px 4px; }
+.rqum-card__refresh { margin-left: 6px; padding: 0 5px; font-size: 12px; line-height: 1.4; border: 1px solid rgba(255,255,255,.15); border-radius: 4px; background: transparent; color: inherit; cursor: pointer; vertical-align: middle; }
+.rqum-card__refresh.is-busy { opacity: .5; }
