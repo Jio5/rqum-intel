@@ -1443,6 +1443,94 @@ RQUM.massView = (data, opts = {}) => {
     try { localStorage.setItem(OUT_KEY, JSON.stringify(outBy)); } catch (_) { /* not kept */ }
     draw();
   };
+  // "📅 Schedule mass" (leaders and the admin): the forms open (kept while the tab redraws, as when
+  // a member is ticked) with their day and time.
+  const schedOpen = new Map();
+  const scheduleForm = (r, tid) => {
+    const st = schedOpen.get(tid);
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmt = (v) => RQUM.formatNumber(Math.round(Number(v) || 0));
+    if (!st.date) {
+      // By default: when everyone has everything back on them (Best), an hour ahead at least, on a quarter.
+      const q = 15 * 60000;
+      const d = new Date(Math.ceil(Math.max(r.readyAt || 0, Date.now() + 3600000) / q) * q);
+      st.date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      st.time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    const box = el('div', 'rqum-mass__sched');
+    box.appendChild(el('p', 'rqum-mass__sched-title', `📅 Schedule a mass on ${r.t.player_name || `#${tid}`}`));
+    const when = el('div', 'rqum-mass__sched-when');
+    const date = el('input');
+    date.type = 'date';
+    date.value = st.date;
+    date.addEventListener('input', () => { st.date = date.value; });
+    const hour = el('input');
+    hour.type = 'time';
+    hour.value = st.time;
+    hour.addEventListener('input', () => { st.time = hour.value; });
+    when.append(el('span', '', 'Day'), date, el('span', '', 'Time'), hour);
+    if (r.readyAt > Date.now() + 60000) when.appendChild(el('span', 'rqum-muted', `everything back on them from ${new Date(r.readyAt).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`));
+    box.appendChild(when);
+    // Who: the members who can hit them (their offense beats the defense, or their spies get
+    // through); the same boxes as the table's.
+    const can = r.everyone.filter((a) => a.beats || a.spyOk);
+    const cannot = r.everyone.length - can.length;
+    box.appendChild(el('p', 'rqum-muted', `Members who can hit them (⚔️ attack, 🗡️💥 assassinate and sabotage)${cannot ? `; ${cannot} more in range cannot` : ''}:`));
+    const who = el('div', 'rqum-mass__sched-who');
+    for (const a of can) {
+      const lab = el('label');
+      const tick = el('input');
+      tick.type = 'checkbox';
+      tick.checked = !a.out;
+      tick.addEventListener('change', () => {
+        const out = new Set(outBy[tid] || []);
+        if (tick.checked) out.delete(a.id); else out.add(a.id);
+        setOut(tid, [...out]);
+      });
+      lab.append(tick, document.createTextNode(` ${a.name} ${a.beats ? '⚔️' : ''}${a.spyOk ? '🗡️💥' : ''}`));
+      who.appendChild(lab);
+    }
+    if (!can.length) who.appendChild(el('span', 'rqum-muted', 'Nobody can hit them now (their defense is above every offense).'));
+    box.appendChild(who);
+    const picked = can.filter((a) => !a.out);
+    const best = r.lean?.best || r.full;
+    if (best && picked.length) {
+      const reach = best.fromAttacks + best.fromAssassins;
+      box.appendChild(el('p', '', `💀 Expected (Best: everyone with their ${MASS_ATTACKS} attacks, assassination and sabotage): ~${fmt(best.total)} killed · ${reach >= best.cap ? '🎯 cap reached' : `${Math.round((reach / Math.max(1, best.cap)) * 100)} % of their cap (${fmt(best.cap)})`}. Its order goes on Discord.`));
+    }
+    const bar = el('div', 'rqum-mass__start');
+    const ok = el('button', 'rqum-mass__start-btn', '✅ Schedule');
+    ok.type = 'button';
+    ok.addEventListener('click', async () => {
+      const at = new Date(`${st.date}T${st.time}`);
+      if (!st.date || !st.time || Number.isNaN(at.getTime())) return opts.error?.('Pick a day and a time');
+      if (at.getTime() < Date.now() + 5 * 60000) return opts.error?.('Pick a time at least 5 minutes ahead');
+      if (!picked.length) return opts.error?.('Tick at least one member');
+      const whenText = at.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      if (!confirm(`Schedule a mass on ${r.t.player_name} on ${whenText} with ${picked.map((a) => a.name).join(', ')}? It is posted on Discord (a reminder 30 minutes before) and ${r.t.player_name} is hidden from everyone's attack and spy lists until then.`)) return;
+      const plan = {
+        scheduled: true, best: true, fewestTurns: !!r.lean?.best,
+        total: best ? Math.round(best.total) : null, reach: best ? Math.round(best.fromAttacks + best.fromAssassins) : null, cap: best ? Math.round(best.cap) : null,
+        fortStart: best?.fortSim ? Math.round(best.fortSim.startHp) : null, fortEnd: best?.fortSim ? Math.round(best.fortSim.endHp) : null, fortMax: r.fortMax || null,
+        members: picked.map((a) => a.name),
+        steps: (best?.steps || []).map((s) => ({ who: s.who, act: s.act, n: s.n, kills: Math.round(s.kills || 0), to: s.to != null ? Math.round(s.to) : null })),
+      };
+      ok.disabled = true;
+      try { await opts.massSchedule(tid, r.t.player_name, at.toISOString(), plan); } catch (err) {
+        ok.disabled = false;
+        return opts.error?.(err.message);
+      }
+      schedOpen.delete(tid);
+      RQUM.toast?.(`📅 Mass on ${r.t.player_name} scheduled: posted on Discord`);
+      opts.reload?.();
+    });
+    const no = el('button', 'rqum-link-btn', 'Cancel');
+    no.type = 'button';
+    no.addEventListener('click', () => { schedOpen.delete(tid); draw(); });
+    bar.append(ok, no);
+    box.appendChild(bar);
+    return box;
+  };
   const wrap = el('div', 'rqum-mass');
   wrap.appendChild(RQUM.freshLine(data.war, opts.reload));
   wrap.appendChild(el('p', 'rqum-muted rqum-mass__intro', `TGO players known to RQUM: who among us can hit them, and the units a mass would kill: Now (the attacks each member has left) and Best (everyone with ${MASS_ATTACKS} attacks of ${MASS_TURNS} turns, an assassination and a sabotage, and from when). Click a line for the details; untick a member there to leave them out of that mass.`));
@@ -1898,7 +1986,10 @@ RQUM.massView = (data, opts = {}) => {
         if (opts.massStart && Array.isArray(data.masses)) {
           const running = data.masses.find((x) => !x.ended && String(x.target_id) === tid);
           const bar = el('div', 'rqum-mass__start');
-          if (running) {
+          if (running?.scheduled && Date.parse(running.started_at) > Date.now()) {
+            const at = new Date(running.started_at);
+            bar.appendChild(el('span', 'rqum-muted', `📅 Mass scheduled by ${running.started_by || '?'} for ${at.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: hidden from the attack and spy lists until then (📜 Masses, above).`));
+          } else if (running) {
             bar.appendChild(el('span', 'rqum-muted', `⏳ Mass started by ${running.started_by || '?'} ${RQUM.formatAge(running.started_at)} ago: its report comes about 45 min after the last hit (📜 Masses, above).`));
           } else {
             const go = el('button', 'rqum-mass__start-btn', `🚀 Start mass on ${r.t.player_name || `#${tid}`}`);
@@ -1920,8 +2011,21 @@ RQUM.massView = (data, opts = {}) => {
               opts.reload?.();
             });
             bar.appendChild(go);
+            // "📅 Schedule mass" (leaders and the admin): a day and time, the members who can hit them.
+            if (opts.massSchedule) {
+              const sch = el('button', 'rqum-mass__sched-btn', schedOpen.has(tid) ? '📅 Schedule mass ▴' : '📅 Schedule mass');
+              sch.type = 'button';
+              sch.title = 'Pick a day, a time and the members: posted on Discord with a reminder 30 minutes before; the target is hidden from everyone\'s attack and spy lists until then';
+              sch.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (schedOpen.has(tid)) schedOpen.delete(tid); else schedOpen.set(tid, {});
+                draw();
+              });
+              bar.appendChild(sch);
+            }
           }
           cell.appendChild(bar);
+          if (!running && opts.massSchedule && schedOpen.has(tid)) cell.appendChild(scheduleForm(r, tid));
         }
       }
       det.appendChild(cell);
@@ -1967,7 +2071,8 @@ RQUM.massReportsView = (masses, opts = {}) => {
   const running = masses.filter((m) => !m.ended);
   const done = masses.filter((m) => m.ended && m.report);
   box.open = running.length > 0;
-  box.appendChild(el('summary', '', `📜 Masses: ${running.length ? `${running.length} running · ` : ''}${done.length} report${done.length === 1 ? '' : 's'}`));
+  const ahead = running.filter((m) => m.scheduled && Date.parse(m.started_at) > Date.now()).length;
+  box.appendChild(el('summary', '', `📜 Masses: ${ahead ? `📅 ${ahead} scheduled · ` : ''}${running.length - ahead ? `${running.length - ahead} running · ` : ''}${done.length} report${done.length === 1 ? '' : 's'}`));
   const k = (v) => RQUM.formatNumber(Math.round(Number(v) || 0));
   const time = (iso, sec = true) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', ...(sec ? { second: '2-digit' } : {}) });
   const day = (iso) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -1982,6 +2087,11 @@ RQUM.massReportsView = (masses, opts = {}) => {
       // "✅ Mass done": the report as soon as every member of its plan had their logs read since.
       const waiting = Array.isArray(m.waiting) ? m.waiting : [];
       line.appendChild(el('span', '', `✅ ${m.target_name || `#${m.target_id}`}: done (${m.done_by || '?'}, ${RQUM.formatAge(m.done_at)} ago). Its report comes as soon as everyone's logs are read${waiting.length ? `: waiting for ${waiting.join(', ')} (their RQUM reads them every 30 minutes while their game is open)` : ''}, 45 min after the last hit at the latest.`));
+    } else if (m.scheduled && Date.parse(m.started_at) > Date.now()) {
+      // 📅 Scheduled: its time, who with; the target held out of the attack and spy lists until then.
+      const at = new Date(m.started_at);
+      const members = m.plan?.members || [];
+      line.appendChild(el('span', '', `📅 ${m.target_name || `#${m.target_id}`}: ${day(m.started_at)}, ${time(m.started_at, false)} (in ${RQUM.formatAge(new Date(Date.now() - (at - Date.now())).toISOString())}), scheduled by ${m.started_by || '?'}${members.length ? ` · ${members.length} member${members.length === 1 ? '' : 's'}: ${members.join(', ')}` : ''}. Hidden from everyone's attack and spy lists until then; a reminder on Discord 30 minutes before.`));
     } else {
       line.appendChild(el('span', '', `⏳ ${m.target_name || `#${m.target_id}`}: started by ${m.started_by || '?'} ${RQUM.formatAge(m.started_at)} ago. Its report comes about 45 min after the last hit, once everyone's logs are read (no hit within 3 h: closed).`));
       if (opts.massDone) {

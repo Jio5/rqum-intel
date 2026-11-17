@@ -958,6 +958,18 @@ table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 
 .rqum-mass__onme-btn:disabled { opacity: .5; cursor: default; }
 .rqum-mass__onme-report { border-left: 3px solid #3b82f6; }
 .rqum-mass__taken > .rqum-mass__onme { margin: 8px 0 4px; }
+/* Targets held for a scheduled mass (mass-hold.js): out of the attack and spy lists until then. */
+.rqum-held { display: none !important; }
+.rqum-held-note { margin: 4px 0 8px; padding: 4px 8px; font-size: 12px; border-left: 3px solid #8b5cf6; background: rgba(139,92,246,.12); border-radius: 4px; }
+.rqum-mass__sched-btn { margin-left: 6px; padding: 3px 10px; font: inherit; font-weight: 600; color: inherit; background: rgba(139,92,246,.15); border: 1px solid rgba(139,92,246,.6); border-radius: 6px; cursor: pointer; }
+.rqum-mass__sched-btn:hover { background: rgba(139,92,246,.28); }
+.rqum-mass__sched { margin: 6px 0; padding: 6px 10px; border-left: 3px solid #8b5cf6; background: rgba(139,92,246,.08); border-radius: 4px; }
+.rqum-mass__sched p { margin: 4px 0; }
+.rqum-mass__sched-title { font-weight: 600; }
+.rqum-mass__sched-when { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rqum-mass__sched-when input { font: inherit; color: inherit; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.2); border-radius: 4px; padding: 2px 4px; color-scheme: dark; }
+.rqum-mass__sched-who { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.rqum-mass__sched-who label { cursor: pointer; white-space: nowrap; }
 .rqum-mass__done-btn { flex: none; padding: 2px 8px; font: inherit; font-weight: 600; color: inherit; background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.6); border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .rqum-mass__done-btn:hover { background: rgba(34,197,94,.28); }
 .rqum-mass__done-btn:disabled { opacity: .6; cursor: default; }
