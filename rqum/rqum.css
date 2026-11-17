@@ -853,8 +853,28 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-panel .rqum-bt__value { font-size: 0.85rem; }
 .rqum-panel .rqum-bt__sub { font-size: 0.62rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* A player's card: my battles with them (common.js battleFold), under the card's header.
+   Small window: two tiles a line (the .rqum-panel rules above); big window: as many as fit. */
+.rqum-card__bt { margin: 2px 0 8px; }
+.rqum-card__bt-sum { cursor: pointer; color: var(--color-gold, #d4af37); font-size: 11px; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; list-style-position: inside; }
+.rqum-card__bt-short { color: #9aa0b5; font-weight: 400; font-variant-numeric: tabular-nums; }
+.rqum-card__bt-short .is-win { color: #22c55e; }
+.rqum-card__bt-short .is-loss { color: #ef4444; }
+.rqum-card__bt[open] .rqum-card__bt-short { display: none; }
+.rqum-card__bt .rqum-bt { margin: 5px 0 2px; }
+.rqum-card__bt-note { font-size: 10px; color: #9aa0b5; font-style: italic; }
+/* Compact tiles on a card: label over value, three a line in the small window, four in the big. */
+.rqum-bt--compact, .rqum-panel .rqum-bt--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+.rqum-big__side .rqum-bt--compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rqum-bt--compact .rqum-bt__tile, .rqum-panel .rqum-bt--compact .rqum-bt__tile { padding: 2px 5px; border-radius: 5px; }
+.rqum-bt--compact .rqum-bt__label, .rqum-panel .rqum-bt--compact .rqum-bt__label { font-size: 9px; letter-spacing: 0; }
+.rqum-bt--compact .rqum-bt__value, .rqum-panel .rqum-bt--compact .rqum-bt__value { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+
 /* Hit List tab (panel.js): the clan's targets, read from the game's clan page. */
 .rqum-hit__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.rqum-hit__sort { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin: 4px 0 6px; font-size: 11px; color: #9aa0b5; }
+.rqum-hit__sort select { font-size: 11px; padding: 1px 4px; background: rgba(0,0,0,0.35); color: inherit; border: 1px solid var(--color-border, #3a3a40); border-radius: 5px; }
+.rqum-hit__sort select option { background: #1b1b22; color: #e8e8e8; }
 .rqum-hit__head a { margin-left: auto; font-size: 12px; }
 .rqum-hit__item { border-bottom: 1px solid rgba(255,255,255,.08); padding: 4px 0; }
 .rqum-hit__sum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; cursor: pointer; list-style: none; }
@@ -881,7 +901,11 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-hit__tile-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #9aa0b5; }
 .rqum-hit__tile strong { font-size: 15px; }
 .rqum-hit__chart-title { font-size: 12px; color: #9aa0b5; margin-bottom: 4px; }
-.rqum-hit__two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.rqum-hit__periods { display: flex; gap: 5px; margin-bottom: -4px; }
+.rqum-hit__period { padding: 2px 10px; border: 1px solid var(--color-border, #3a3a40); border-radius: 10px; background: none; color: var(--color-text-muted, #9a9aa0); font: 600 11px system-ui, sans-serif; cursor: pointer; }
+.rqum-hit__period.is-on { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); }
+.rqum-hit__overview > div:last-child { display: flex; flex-direction: column; gap: 10px; }
+.rqum-hit__two {display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .rqum-hit__bar { display: grid; grid-template-columns: 110px 1fr 56px; align-items: center; gap: 6px; font-size: 11px; margin: 2px 0; }
 .rqum-hit__bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rqum-hit__bar-track { height: 8px; border-radius: 4px; background: rgba(255,255,255,.06); overflow: hidden; }
@@ -890,3 +914,143 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-hit__card:empty { display: none; }
 .rqum-hit__card { margin-bottom: 8px; }
 .rqum-hit__read { font-size: 11px; margin: 0 0 4px; }
+.rqum-hit__about { font-size: 11px; color: #9aa0b5; }
+.rqum-hit__about summary { cursor: pointer; }
+.rqum-hit__about p { margin: 3px 0 0; }
+/* Battle totals as one compact table (both ways), whatever the window. */
+table.rqum-bt { display: table; width: 100%; border-collapse: collapse; font-size: 12px; margin: 4px 0 6px; font-variant-numeric: tabular-nums; }
+table.rqum-bt th, table.rqum-bt td { padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,.06); white-space: nowrap; }
+table.rqum-bt thead th { font-size: 10px; color: #9aa0b5; text-transform: uppercase; letter-spacing: .03em; font-weight: 600; text-align: right; }
+table.rqum-bt tbody th { text-align: left; font-weight: 500; color: #c9c5b8; }
+table.rqum-bt td { text-align: right; font-weight: 700; cursor: help; }
+table.rqum-bt .rqum-bt__unknown { color: #6b7080; font-weight: 400; }
+table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 0; padding-top: 4px; }
+/* 24h tab (common.js, RQUM.dailyView). */
+.rqum-daily__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; }
+.rqum-daily__who { max-width: 160px; }
+.rqum-daily__tgo { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
+.rqum-daily .rqum-hit__tiles { margin-bottom: 8px; }
+.rqum-daily__tile { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.rqum-daily__tile.is-on { border-color: var(--rqum-accent, #d4a24c); box-shadow: 0 0 0 1px var(--rqum-accent, #d4a24c) inset; }
+.rqum-daily__note { font-size: 11px; margin-top: 6px; }
+/* Mass tab (common.js, RQUM.massView). */
+.rqum-mass__intro { font-size: 11px; margin: 0 0 6px; }
+.rqum-mass__mode { display: flex; align-items: center; gap: 2px; margin: 0 0 6px; font-size: 12px; cursor: pointer; }
+/* Mass tab: a box per member in a target's mass, the fewest members to reach the cap (common.js, RQUM.massView). */
+.rqum-mass__members th:first-child, .rqum-mass__members td:first-child { width: 18px; padding-right: 0; }
+.rqum-mass__members input { margin: 0; cursor: pointer; accent-color: var(--rqum-accent, #d4a24c); }
+.rqum-mass__members tr.is-out td:not(:first-child) { opacity: .4; text-decoration: line-through; }
+.rqum-mass__left { margin: 4px 0 0; font-size: 11px; color: #fbbf24; }
+.rqum-mass__fewest { margin: 8px 0 4px; padding: 6px 10px; font-size: 12px; background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.35); border-radius: 6px; }
+.rqum-mass__fewest strong { color: #86efac; }
+.rqum-mass__fewest-line { margin-top: 3px; }
+.rqum-mass__only { margin-left: 4px; padding: 0 7px; font: inherit; font-size: 11px; color: inherit; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.2); border-radius: 5px; cursor: pointer; }
+.rqum-mass__only:hover { background: rgba(255,255,255,.14); }
+/* Mass tab: 🚀 Start mass and 📜 Masses (common.js, RQUM.massReportsView). */
+.rqum-mass__start { margin: 8px 0 2px; font-size: 12px; }
+.rqum-mass__start-btn { padding: 3px 10px; font: inherit; font-weight: 600; color: #fff; background: #b91c1c; border: 1px solid #ef4444; border-radius: 6px; cursor: pointer; }
+.rqum-mass__start-btn:hover { background: #dc2626; }
+.rqum-mass__start-btn:disabled { opacity: .5; cursor: default; }
+/* Mass tab: 🛡️ Mass on me (common.js, RQUM.massOnMeView). */
+.rqum-mass__onme { margin: 0 0 8px; font-size: 12px; }
+.rqum-mass__onme-btn { padding: 3px 10px; font: inherit; font-weight: 600; color: inherit; background: rgba(59,130,246,.15); border: 1px solid rgba(59,130,246,.6); border-radius: 6px; cursor: pointer; }
+.rqum-mass__onme-btn:hover { background: rgba(59,130,246,.28); }
+.rqum-mass__onme-btn:disabled { opacity: .5; cursor: default; }
+.rqum-mass__onme-report { border-left: 3px solid #3b82f6; }
+.rqum-mass__taken > .rqum-mass__onme { margin: 8px 0 4px; }
+.rqum-mass__done-btn { flex: none; padding: 2px 8px; font: inherit; font-weight: 600; color: inherit; background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.6); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.rqum-mass__done-btn:hover { background: rgba(34,197,94,.28); }
+.rqum-mass__done-btn:disabled { opacity: .6; cursor: default; }
+.rqum-mass__taken-total { margin: 6px 0; font-weight: 600; }
+.rqum-mass__views { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
+.rqum-mass__views button { padding: 3px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.rqum-mass__views button.is-active { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); background: color-mix(in srgb, var(--color-gold, #d4af37) 8%, transparent); }
+.rqum-mass__reports { margin: 0 0 10px; padding: 4px 8px; font-size: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 6px; }
+.rqum-mass__reports > summary { cursor: pointer; font-weight: 600; color: var(--rqum-accent, #d4a24c); }
+.rqum-mass__running { display: flex; align-items: center; gap: 6px; margin: 6px 0; padding: 4px 8px; background: rgba(245,158,11,.1); border-left: 3px solid #f59e0b; border-radius: 4px; }
+.rqum-mass__report { margin: 6px 0; padding: 4px 8px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 6px; }
+.rqum-mass__report > summary { cursor: pointer; }
+.rqum-mass__report-when { margin: 6px 0 4px; }
+.rqum-mass__report-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; margin: 6px 0; }
+.rqum-mass__tile { display: flex; flex-direction: column; gap: 1px; padding: 5px 8px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 6px; font-size: 11px; }
+.rqum-mass__tile b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.rqum-mass__tile-label { color: #9aa0b5; }
+.rqum-mass__tile.is-near { border-color: rgba(245,158,11,.6); }
+.rqum-mass__tile.is-full { border-color: rgba(34,197,94,.7); background: rgba(34,197,94,.08); }
+.rqum-mass__report-plan { margin: 4px 0; }
+.rqum-mass__report-warn { margin: 4px 0; color: #fbbf24; }
+.rqum-mass__report-table { font-size: 12px; font-variant-numeric: tabular-nums; }
+.rqum-mass__timeline { margin-top: 6px; }
+.rqum-mass__timeline > summary { cursor: pointer; color: var(--rqum-accent, #d4a24c); }
+.rqum-mass__timeline ol { margin: 4px 0 0 18px; padding: 0; font-variant-numeric: tabular-nums; }
+.rqum-mass__timeline li.is-loss { color: #f87171; }
+.rqum-mass__table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rqum-mass__table > thead th { font-size: 10px; color: #9aa0b5; text-transform: uppercase; text-align: right; padding: 3px 6px; cursor: help; }
+.rqum-mass__table > thead th:first-child { text-align: left; }
+.rqum-mass__row { cursor: pointer; }
+.rqum-mass__row > td { padding: 3px 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,.06); white-space: nowrap; }
+.rqum-mass__row > td.rqum-mass__name { text-align: left; }
+.rqum-mass__row:hover > td { background: rgba(255,255,255,.03); }
+.rqum-mass__kills { font-weight: 700; color: #22c55e; }
+.rqum-mass .is-win { color: #22c55e; }
+.rqum-mass .is-loss { color: #ef4444; }
+.rqum-mass__detail > td { padding: 2px 0 8px 12px; }
+.rqum-mass__age { font-size: 10px; color: #9aa0b5; font-weight: 400; }
+.rqum-mass__age.is-old { color: #f59e0b; }
+.rqum-mass__ready { display: block; font-size: 10px; font-weight: 400; color: #9aa0b5; }
+.rqum-mass__plan { margin-top: 6px; font-size: 12px; }
+.rqum-mass__plan summary { cursor: pointer; color: var(--rqum-accent, #d4a24c); }
+.rqum-mass__plan ol { margin: 4px 0 0 18px; padding: 0; }
+.rqum-mass__plan li { margin: 2px 0; }
+.rqum-mass__cap { color: #f59e0b; }
+.rqum-mass__gauge { display: block; height: 4px; margin-top: 3px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+.rqum-mass__gauge-fill { display: block; height: 100%; background: #9aa0b5; }
+.rqum-mass__gauge.is-near .rqum-mass__gauge-fill { background: #f59e0b; }
+.rqum-mass__gauge.is-full .rqum-mass__gauge-fill { background: #22c55e; }
+.rqum-mass__gauge-text { display: block; font-size: 10px; font-weight: 400; color: #9aa0b5; }
+.rqum-mass__plan-end { margin: 4px 0 0; font-size: 11px; color: #9aa0b5; }
+.rqum-mass__plan-end.is-full { color: #22c55e; }
+.rqum-mass__missing { font-size: 12px; color: #fde68a; margin: 4px 0 8px; padding: 6px 10px; background: rgba(245,158,11,.14); border: 1px solid rgba(245,158,11,.55); border-left: 4px solid #f59e0b; border-radius: 6px; }
+.rqum-mass__missing strong { color: #fbbf24; }
+.rqum-mass__warn { margin-left: 6px; padding: 0 5px; font-size: 10px; font-weight: 700; color: #1a1205; background: #f59e0b; border-radius: 8px; cursor: help; }
+.rqum-mass__missing ul { margin: 2px 0 0 16px; padding: 0; }
+/* A player's card: my ratios with them (common.js, ratioLine). */
+.rqum-card__ratios { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; font-size: 11px; }
+.rqum-card__ratio { padding: 1px 6px; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; white-space: nowrap; cursor: help; }
+.rqum-card__ratio .is-win { color: #22c55e; }
+.rqum-card__ratio .is-loss { color: #ef4444; }
+/* Active Time tab (common.js, RQUM.activeView). */
+.rqum-active__list { display: flex; flex-direction: column; gap: 2px; }
+.rqum-active__row { display: grid; grid-template-columns: 110px 1fr 34px; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.rqum-active__row:hover:not(.rqum-active__legend) { background: rgba(255,255,255,.03); }
+.rqum-active__legend { cursor: default; }
+.rqum-active__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rqum-active__count { text-align: right; color: #9aa0b5; font-size: 11px; }
+.rqum-active__strip, .rqum-active__hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; }
+.rqum-active__hours span { font-size: 9px; color: #9aa0b5; }
+.rqum-active__strip .rqum-active__cell { height: 14px; border-radius: 2px; }
+.rqum-active__card { margin-bottom: 10px; padding: 8px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; }
+.rqum-active__head { display: flex; align-items: center; gap: 4px; }
+.rqum-active__head > button:last-child { margin-left: auto; }
+.rqum-active__name { font-weight: 700; }
+.rqum-active__usual { margin: 4px 0 6px; font-size: 12px; color: #fbbf24; }
+.rqum-active__grid { display: grid; grid-template-columns: 30px repeat(24, 1fr); gap: 2px; }
+.rqum-active__grid .rqum-active__cell { height: 16px; border-radius: 2px; cursor: help; }
+.rqum-active__hlabel, .rqum-active__dlabel { font-size: 9px; color: #9aa0b5; }
+.rqum-bounty { margin: 8px 0; padding: 6px 8px; border: 1px solid rgba(245,158,11,.5); border-radius: 8px; background: rgba(245,158,11,.06); }
+.rqum-bounty.is-ended { border-color: rgba(255,255,255,.1); background: transparent; }
+.rqum-bounty__head { display: flex; align-items: center; gap: 4px; }
+.rqum-bounty__head > button { margin-left: auto; }
+.rqum-war-room__bar { margin-bottom: 8px; }
+.rqum-war-room__bar .rqum-ranking__tabs { margin-bottom: 6px; }
+.rqum-war-room__days button { flex: 1 1 20%; }
+.rqum-war-room__bar .rqum-ranking__tabs button { flex: 1 1 22%; padding: 6px 4px; }
+.rqum-card__refresh { margin-left: 6px; padding: 0 5px; font-size: 12px; line-height: 1.4; border: 1px solid rgba(255,255,255,.15); border-radius: 4px; background: transparent; color: inherit; cursor: pointer; vertical-align: middle; }
+.rqum-card__refresh.is-busy { opacity: .5; }
+/* How fresh the clan's war statistics are (common.js, RQUM.freshLine). */
+.rqum-fresh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 8px; font-size: 11px; color: #9aa0b5; }
+.rqum-fresh__head { font-weight: 600; color: #c9c5b8; }
+.rqum-fresh__members { display: flex; flex-wrap: wrap; gap: 3px; flex-basis: 100%; }
+.rqum-fresh__chip { padding: 0 5px; border: 1px solid rgba(255,255,255,.1); border-radius: 4px; white-space: nowrap; cursor: help; }
+.rqum-fresh__chip.is-late { color: #f59e0b; border-color: rgba(245,158,11,.4); }
+.rqum-fresh__chip.is-old { color: #ef4444; border-color: rgba(239,68,68,.4); }
