@@ -598,7 +598,9 @@
     let clan;
     let war;
     let masses;
-    try { [tgo, clan, war, masses] = await Promise.all([call('rqum_clan', { p_clan: 'TGO' }), call('rqum_alliance'), call('rqum_war_clan').catch(() => []), call('rqum_masses').catch(() => null)]); } catch (err) {
+    let taken;
+    let me;
+    try { [tgo, clan, war, masses, taken, me] = await Promise.all([call('rqum_mass_targets'), call('rqum_alliance'), call('rqum_war_clan').catch(() => []), call('rqum_masses').catch(() => null), call('rqum_masses_taken').catch(() => null), rpc('rqum_me').catch(() => null)]); } catch (err) {
       body.replaceChildren(el('p', 'rqum-muted', err.message));
       return;
     }
@@ -611,10 +613,13 @@
       card.replaceChildren(close, p ? RQUM.intelCard(p) : el('p', 'rqum-muted', 'No stats yet.'));
       card.scrollIntoView({ block: 'nearest' });
     };
-    body.replaceChildren(card, RQUM.massView({ targets: tgo || [], members: clan || [], war: war || [], masses }, {
+    body.replaceChildren(card, RQUM.massView({ targets: tgo || [], members: clan || [], war: war || [], masses, taken }, {
       pick,
       massStart: (id, name, plan) => call('rqum_mass_start', { p_target_id: Number(id), p_name: name || null, p_plan: plan || null }),
       massCancel: (id) => call('rqum_mass_cancel', { p_id: Number(id) }),
+      massDone: (id) => call('rqum_mass_done', { p_id: Number(id) }),
+      // 📅 Schedule mass: leaders only here (the admin key is only in the extension).
+      massSchedule: me?.officer ? (id, name, at, plan) => call('rqum_mass_schedule', { p_target_id: Number(id), p_name: name || null, p_at: at, p_plan: plan }) : null,
       reload: () => renderMassTab(body),
       error: (m) => setStatus(m, true),
     }));

@@ -39,7 +39,7 @@ RQUM.whenSignedIn = () => {
 
 RQUM.getConfig = async () => {
   const { rqumConfig } = await chrome.storage.local.get('rqumConfig');
-  return { captureEnabled: true, shareOwnStats: true, greenAttack: true, compactAttack: true, hideClanRecent: false, fortAlert: true, tierCosts: true, eyeButtons: true, attackFilters: true, ffaMarks: true, gearCheck: true, dashboardPlus: true, voteInBar: true, dashAttackList: true, dashAssassinate: true, mercReminder: true, summaryHistory: true, buildingCosts: true, profileTiles: true, battleTotals: true, collapseCards: true, resultWindow: true, ...rqumConfig };
+  return { captureEnabled: true, shareOwnStats: true, greenAttack: true, compactAttack: true, hideClanRecent: false, fortAlert: true, tierCosts: true, eyeButtons: true, attackFilters: true, ffaMarks: true, gearCheck: true, statRatio: true, dashboardPlus: true, voteInBar: true, dashAttackList: true, dashAssassinate: true, mercReminder: true, summaryHistory: true, buildingCosts: true, profileTiles: true, battleTotals: true, collapseCards: true, resultWindow: true, ...rqumConfig };
 };
 
 // Fort alert (option fortAlert, on by default): the clan's members, me included, whose fort is at
@@ -803,6 +803,39 @@ RQUM.hitListGame = (doc) => {
 //         rqum: rows of rqum_hitlist, members: rows of rqum_war_clan, me: rqum_me, known: { id: player } }.
 // opts: { big, external (web page), pick(id, name), profileHref(id), gameHref(path), search(query) -> rows,
 //         add(id, name, note), remove(id), reload(), error(message) }.
+// How fresh the clan's war statistics are, at the top of the tabs that use them: when this
+// browser's copy was taken (⟳ takes it again at once), and how old each member's figures are
+// (their RQUM sends them every 30 minutes while their game is open): orange past 1 h, red past 6 h.
+// rows: rqum_war_clan rows (updated_at, and copy_at in the extension); reload(): the tab again.
+RQUM.freshLine = (rows, reload) => {
+  const box = el('div', 'rqum-fresh');
+  const at = (rows || []).map((r) => r.copy_at).find(Boolean);
+  const head = el('span', 'rqum-fresh__head', `🕒 Figures as of ${new Date(at || Date.now()).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`);
+  head.title = 'Kept in this browser and asked again at most every 15 minutes; each member\'s RQUM sends theirs every 30 minutes while their game is open';
+  box.appendChild(head);
+  if (reload && globalThis.chrome?.runtime?.id) {
+    const again = el('button', 'rqum-card__refresh', '⟳');
+    again.type = 'button';
+    again.title = 'Ask the database again now';
+    again.addEventListener('click', async () => {
+      again.disabled = true;
+      await RQUM.send('refreshAll');
+      reload();
+    });
+    box.appendChild(again);
+  }
+  const ages = (rows || []).filter((r) => r.updated_at).map((r) => ({ name: r.name || `#${r.player_id}`, ms: Date.now() - Date.parse(r.updated_at), at: r.updated_at }))
+    .sort((a, b) => a.ms - b.ms);
+  const list = el('span', 'rqum-fresh__members');
+  for (const a of ages) {
+    const chip = el('span', `rqum-fresh__chip${a.ms > 6 * 3600000 ? ' is-old' : a.ms > 3600000 ? ' is-late' : ''}`, `${a.name} ${RQUM.formatAge(a.at)}`);
+    chip.title = `${a.name}'s figures sent ${RQUM.formatAge(a.at)} ago (${new Date(a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})`;
+    list.appendChild(chip);
+  }
+  box.appendChild(list);
+  return box;
+};
+
 RQUM.hitListView = (data, opts) => {
   const members = data.members || [];
   const myName = String(data.me?.name || '').toLowerCase();
@@ -844,6 +877,7 @@ RQUM.hitListView = (data, opts) => {
   targets.forEach((t) => t.attackers.sort((a, b) => b.gold - a.gold || b.attacks - a.attacks));
 
   const wrap = el('div', `rqum-hit${opts.big ? ' rqum-hit--big' : ''}`);
+  wrap.appendChild(RQUM.freshLine(data.members, opts.reload));
   const head = el('div', 'rqum-hit__head');
   const reload = el('button', 'rqum-link-btn', '🔄');
   reload.type = 'button';
@@ -1207,12 +1241,13 @@ const DAILY_METRICS = [
   ['fortTaken', '🧱 Fort damage taken', '#ef4444', 'Damage to our forts (from the battle reports)'],
 ];
 const DAILY_KEY = 'rqumDailyView';
-RQUM.dailyView = (data) => {
+RQUM.dailyView = (data, opts = {}) => {
   let state = { range: '24h', who: '', tgo: false, metric: 'plundered' };
   try { state = { ...state, ...JSON.parse(localStorage.getItem(DAILY_KEY) || '{}') }; } catch (_) { /* storage off */ }
   const members = [...(data.members || [])].sort((a, b) => String(a.name).localeCompare(String(b.name)));
   if (state.who && !members.some((m) => String(m.player_id) === state.who)) state.who = '';
   const wrap = el('div', 'rqum-daily');
+  wrap.appendChild(RQUM.freshLine(data.members, opts.reload));
   const bar = el('div', 'rqum-daily__bar');
   const range = el('div', 'rqum-hit__periods');
   for (const [k, label, title] of [['24h', 'Last 24h', 'The last 24 hours, hour by hour'], ['today', 'Today', 'Since midnight (your time)']]) {
@@ -1374,7 +1409,23 @@ function massLossShare(off, def, protection) {
   const closeness = off / def;
   return closeness > 0.6 ? 0.003 * ((closeness - 0.6) / 0.4) * turnBonus * protection : 0;
 }
-// data: { targets: TGO rows (rqum_clan), members: RQUM rows (rqum_alliance) }; opts.pick(id, name).
+// The units each won attack killed once their cap was reached, as seen in our past mass reports on
+// them (📜 Masses): their last won hits (3 or more) all killing the same few (30 at most), far fewer
+// than before (the game's minimum, about 1 per unit row). 0: never seen.
+function massAfterCapSeen(masses, tid) {
+  let seen = 0;
+  for (const m of Array.isArray(masses) ? masses : []) {
+    if (String(m.target_id) !== String(tid) || !Array.isArray(m.report?.hits)) continue;
+    const won = m.report.hits.filter((h) => h.won).sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).map((h) => Number(h.killed) || 0);
+    if (won.length < 4) continue;
+    const last = won[won.length - 1];
+    let tail = 0;
+    while (tail < won.length && won[won.length - 1 - tail] === last) tail += 1;
+    if (tail >= 3 && last > 0 && last <= 30 && won.slice(0, won.length - tail).some((k) => k > last * 1.5)) seen = Math.max(seen, last);
+  }
+  return seen;
+}
+// data: { targets: TGO rows and the players added to them (rqum_mass_targets), members: RQUM rows (rqum_alliance) }; opts.pick(id, name).
 RQUM.massView = (data, opts = {}) => {
   const num = (st, k) => (typeof st?.[k]?.v === 'number' ? st[k].v : null);
   // A figure, or its floor when newer and above it ("> X" after a failed attack / spy operation).
@@ -1408,8 +1459,100 @@ RQUM.massView = (data, opts = {}) => {
     try { localStorage.setItem(OUT_KEY, JSON.stringify(outBy)); } catch (_) { /* not kept */ }
     draw();
   };
+  // "📅 Schedule mass" (leaders and the admin): the forms open (kept while the tab redraws, as when
+  // a member is ticked) with their day and time.
+  const schedOpen = new Map();
+  const scheduleForm = (r, tid) => {
+    const st = schedOpen.get(tid);
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmt = (v) => RQUM.formatNumber(Math.round(Number(v) || 0));
+    if (!st.date) {
+      // By default: when everyone has everything back on them (Best), an hour ahead at least, on a quarter.
+      const q = 15 * 60000;
+      const d = new Date(Math.ceil(Math.max(r.readyAt || 0, Date.now() + 3600000) / q) * q);
+      st.date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      st.time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    const box = el('div', 'rqum-mass__sched');
+    box.appendChild(el('p', 'rqum-mass__sched-title', `📅 Schedule a mass on ${r.t.player_name || `#${tid}`}`));
+    const when = el('div', 'rqum-mass__sched-when');
+    const date = el('input');
+    date.type = 'date';
+    date.value = st.date;
+    date.addEventListener('input', () => { st.date = date.value; });
+    const hour = el('input');
+    hour.type = 'time';
+    hour.value = st.time;
+    hour.addEventListener('input', () => { st.time = hour.value; });
+    when.append(el('span', '', 'Day'), date, el('span', '', 'Time'), hour);
+    if (r.readyAt > Date.now() + 60000) when.appendChild(el('span', 'rqum-muted', `everything back on them from ${new Date(r.readyAt).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`));
+    box.appendChild(when);
+    // Who: the members who can hit them (their offense beats the defense, or their spies get
+    // through); the same boxes as the table's.
+    const can = r.everyone.filter((a) => a.beats || a.spyOk);
+    const cannot = r.everyone.length - can.length;
+    box.appendChild(el('p', 'rqum-muted', `Members who can hit them (⚔️ attack, 🗡️💥 assassinate and sabotage)${cannot ? `; ${cannot} more in range cannot` : ''}:`));
+    const who = el('div', 'rqum-mass__sched-who');
+    for (const a of can) {
+      const lab = el('label');
+      const tick = el('input');
+      tick.type = 'checkbox';
+      tick.checked = !a.out;
+      tick.addEventListener('change', () => {
+        const out = new Set(outBy[tid] || []);
+        if (tick.checked) out.delete(a.id); else out.add(a.id);
+        setOut(tid, [...out]);
+      });
+      lab.append(tick, document.createTextNode(` ${a.name} ${a.beats ? '⚔️' : ''}${a.spyOk ? '🗡️💥' : ''}`));
+      who.appendChild(lab);
+    }
+    if (!can.length) who.appendChild(el('span', 'rqum-muted', 'Nobody can hit them now (their defense is above every offense).'));
+    box.appendChild(who);
+    const picked = can.filter((a) => !a.out);
+    const best = r.lean?.best || r.full;
+    if (best && picked.length) {
+      const reach = best.fromAttacks + best.fromAssassins;
+      box.appendChild(el('p', '', `💀 Expected (Best: everyone with their ${MASS_ATTACKS} attacks, assassination and sabotage): ~${fmt(best.total)} killed · ${reach >= best.cap ? '🎯 cap reached' : `${Math.round((reach / Math.max(1, best.cap)) * 100)} % of their cap (${fmt(best.cap)})`}. Its order goes on Discord.`));
+    }
+    const bar = el('div', 'rqum-mass__start');
+    const ok = el('button', 'rqum-mass__start-btn', '✅ Schedule');
+    ok.type = 'button';
+    ok.addEventListener('click', async () => {
+      const at = new Date(`${st.date}T${st.time}`);
+      if (!st.date || !st.time || Number.isNaN(at.getTime())) return opts.error?.('Pick a day and a time');
+      if (at.getTime() < Date.now() + 5 * 60000) return opts.error?.('Pick a time at least 5 minutes ahead');
+      if (!picked.length) return opts.error?.('Tick at least one member');
+      const whenText = at.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      if (!confirm(`Schedule a mass on ${r.t.player_name} on ${whenText} with ${picked.map((a) => a.name).join(', ')}? It is posted on Discord (a reminder 30 minutes before) and ${r.t.player_name} is hidden from everyone's attack and spy lists until then.`)) return;
+      const plan = {
+        scheduled: true, best: true, fewestTurns: !!r.lean?.best,
+        total: best ? Math.round(best.total) : null, reach: best ? Math.round(best.fromAttacks + best.fromAssassins) : null, cap: best ? Math.round(best.cap) : null,
+        fortStart: best?.fortSim ? Math.round(best.fortSim.startHp) : null, fortEnd: best?.fortSim ? Math.round(best.fortSim.endHp) : null, fortMax: r.fortMax || null,
+        members: picked.map((a) => a.name),
+        steps: (best?.steps || []).map((s) => ({ who: s.who, act: s.act, n: s.n, kills: Math.round(s.kills || 0), to: s.to != null ? Math.round(s.to) : null })),
+      };
+      ok.disabled = true;
+      try { await opts.massSchedule(tid, r.t.player_name, at.toISOString(), plan); } catch (err) {
+        ok.disabled = false;
+        return opts.error?.(err.message);
+      }
+      schedOpen.delete(tid);
+      RQUM.toast?.(`📅 Mass on ${r.t.player_name} scheduled: posted on Discord`);
+      opts.reload?.();
+    });
+    const no = el('button', 'rqum-link-btn', 'Cancel');
+    no.type = 'button';
+    no.addEventListener('click', () => { schedOpen.delete(tid); draw(); });
+    bar.append(ok, no);
+    box.appendChild(bar);
+    return box;
+  };
   const wrap = el('div', 'rqum-mass');
-  wrap.appendChild(el('p', 'rqum-muted rqum-mass__intro', `TGO players known to RQUM: who among us can hit them, and the units a mass would kill: Now (the attacks each member has left) and Best (everyone with ${MASS_ATTACKS} attacks of ${MASS_TURNS} turns, an assassination and a sabotage, and from when). Click a line for the details; untick a member there to leave them out of that mass.`));
+  wrap.appendChild(RQUM.freshLine(data.war, opts.reload));
+  wrap.appendChild(el('p', 'rqum-muted rqum-mass__intro', `TGO players known to RQUM (and the players added to the mass targets): who among us can hit them, and the units a mass would kill: Now (the attacks each member has left) and Best (everyone with ${MASS_ATTACKS} attacks of ${MASS_TURNS} turns, an assassination and a sabotage, and from when). Click a line for the details; untick a member there to leave them out of that mass.`));
+  // "🛡️ Mass on me?" sits in "🛡️ Masses on us" (on its own when that list could not be had).
+  if (opts.massOnMe && !Array.isArray(data.taken)) wrap.appendChild(RQUM.massOnMeView(opts));
+  if (Array.isArray(data.taken)) wrap.appendChild(RQUM.massesTakenView(data.taken, opts));
   if (Array.isArray(data.masses)) wrap.appendChild(RQUM.massReportsView(data.masses, opts));
   // "⏱️ Fewest turns": each order (and the plan "🚀 Start mass" keeps) has only the attacks needed
   // to reach their cap, the fewest possible (remembered in this browser).
@@ -1453,6 +1596,11 @@ RQUM.massView = (data, opts = {}) => {
       const army = pool || num(st, 'army');
       const fortMax = num(st, 'fort_max');
       const protection = massProtection(num(st, 'fort_pct'));
+      // Once their cap is reached, each won attack still kills about 1 unit per unit row (one type of
+      // one tier; the game's assistant): the rows of their last spy report, or more if a past mass's
+      // report on them saw more (MASS_AFTER_CAP_SEEN: its last hits all killing the same few).
+      const unitRows = (Array.isArray(st.report_army?.v) ? st.report_army.v : []).filter((u) => u.quantity > 0).length;
+      const afterCap = Math.max(unitRows, massAfterCapSeen(data.masses, tid));
       const inRange = allMembers.filter((m) => level != null && m.level != null && Math.abs(m.level - level) <= 10);
       // Already done in 24 h by each member (their logs): attacks used, assassination / sabotage used,
       // and when everything is back (each attack's slot frees 24 h after it, to the second from their
@@ -1511,7 +1659,12 @@ RQUM.massView = (data, opts = {}) => {
           });
         } else saboteurs.forEach((a) => steps.push({ who: a.name, act: 'sabotage', n: 1, kills: 0 }));
         const afterSabo = hp;
+        // Their daily cap, less what we already killed of theirs in 24 h (others' kills are not known).
+        const cap = Math.max(0, fullCap - before.killed);
+        // fromAttacks: what the attacks kill up to their cap; afterCapKills: the won attacks after it
+        // (about 1 per unit row each).
         let fromAttacks = 0;
+        let afterCapKills = 0;
         if (def && army) {
           // The fort damage of an attack stops growing at offense ÷ defense = 2, the units it kills keep
           // growing with the ratio (dominance) and with the protection (the fort going down). So first
@@ -1531,12 +1684,20 @@ RQUM.massView = (data, opts = {}) => {
               const prot = hp != null ? massProtection((hp / fortMax) * 100) : protection;
               let kill = massLossShare(a.off, def.v, prot) * army;
               if (a.beats && hp === 0) kill += 0.0005 * army; // a fort at 0 HP: 0.05 % of the army more
+              // Up to their cap, then about 1 per unit row (a won attack).
+              const capLeft = cap - fromAttacks;
+              if (capLeft <= 0) {
+                kill = a.beats ? afterCap : 0;
+                afterCapKills += kill;
+              } else {
+                kill = Math.min(kill, capLeft);
+                fromAttacks += kill;
+              }
               step.kills += kill;
               if (hp != null) hp = Math.max(0, hp - Math.floor(10 * MASS_TURNS * Math.min(2, r) * (1 + a.siege / 100)) * Math.max(0.5, 1 / (1 + 0.15 * hits)));
               hits += 1;
             }
             step.to = hp;
-            fromAttacks += step.kills;
             steps.push(step);
           }
         }
@@ -1546,10 +1707,9 @@ RQUM.massView = (data, opts = {}) => {
           fromAssassins += k;
           steps.push({ who: a.name, act: 'assassinate', n: 1, kills: k });
         }
-        // Their daily cap, less what we already killed of theirs in 24 h (others' kills are not known).
-        const cap = Math.max(0, fullCap - before.killed);
         const fortSim = fortMax && def && army ? { startHp, afterSabo, endHp: hp, saboteurs: saboteurs.length } : null;
-        return { fortSim, steps, fromAttacks, fromAssassins, assassins: assassins.length, cap, total: Math.min(cap, fromAttacks + fromAssassins), capped: fromAttacks + fromAssassins > cap };
+        return { fortSim, steps, fromAttacks, fromAssassins, afterCapKills, afterCap, assassins: assassins.length, cap,
+          total: Math.min(cap, fromAttacks + fromAssassins) + afterCapKills, capped: fromAttacks + fromAssassins >= cap && cap > 0 };
       }
       // Full: everyone with their 5 attacks, assassination and sabotage (once the last 24 h are over).
       const FULL = [() => MASS_ATTACKS, (a) => a.spyOk, (a) => a.spyOk, { attacks: 0, killed: 0, sabotages: 0 }];
@@ -1699,7 +1859,7 @@ RQUM.massView = (data, opts = {}) => {
       const killCell = (m, label) => {
         const td = el('td', 'rqum-mass__kills', r.army && r.def ? `${m.capped ? '≈' : ''}${Math.round(m.total)}` : '?');
         td.title = r.army && r.def
-          ? `${label}\nAttacks: ${Math.round(m.fromAttacks)} · assassinations: ${Math.round(m.fromAssassins)} (${m.assassins} assassin${m.assassins === 1 ? '' : 's'})\nCap: ${Math.round(m.cap)} (5 % of ${RQUM.formatExact(r.army)} units, at most ${MASS_DAY_CAP}${m.cap < r.fullCap ? `, less ${Math.round(r.fullCap - m.cap)} we already killed in 24 h` : ''})${m.capped ? ': reached' : ''}\n${m.fortSim ? `Fort: ${Math.round(m.fortSim.startHp)} → ${Math.round(m.fortSim.afterSabo)} HP after ${m.fortSim.saboteurs} sabotage${m.fortSim.saboteurs === 1 ? '' : 's'} → ${Math.round(m.fortSim.endHp)} / ${RQUM.formatExact(r.fortMax)} HP after the attacks (protection ${r.protection.toFixed(2)} → ${massProtection((m.fortSim.endHp / r.fortMax) * 100).toFixed(2)})` : `Fort protection used: ${r.protection.toFixed(2)} (their fort's maximum HP is not known: spy them or open their profile)`}`
+          ? `${label}\nAttacks: ${Math.round(m.fromAttacks)} · assassinations: ${Math.round(m.fromAssassins)} (${m.assassins} assassin${m.assassins === 1 ? '' : 's'})\nCap: ${Math.round(m.cap)} (5 % of ${RQUM.formatExact(r.army)} units, at most ${MASS_DAY_CAP}${m.cap < r.fullCap ? `, less ${Math.round(r.fullCap - m.cap)} we already killed in 24 h` : ''})${m.capped ? ': reached' : ''}${m.afterCapKills ? `\nAfter the cap: ${Math.round(m.afterCapKills)} more (about ${m.afterCap} for each attack won after it, 1 per unit row)` : ''}\n${m.fortSim ? `Fort: ${Math.round(m.fortSim.startHp)} → ${Math.round(m.fortSim.afterSabo)} HP after ${m.fortSim.saboteurs} sabotage${m.fortSim.saboteurs === 1 ? '' : 's'} → ${Math.round(m.fortSim.endHp)} / ${RQUM.formatExact(r.fortMax)} HP after the attacks (protection ${r.protection.toFixed(2)} → ${massProtection((m.fortSim.endHp / r.fortMax) * 100).toFixed(2)})` : `Fort protection used: ${r.protection.toFixed(2)} (their fort's maximum HP is not known: spy them or open their profile)`}`
           : (r.def ? 'Their army is not known to RQUM' : 'Their defense is not known to RQUM');
         // How close to their daily cap (the goal of a mass: reach it), as a gauge.
         if (r.army && r.def) {
@@ -1840,8 +2000,10 @@ RQUM.massView = (data, opts = {}) => {
             const what = st2.act === 'sabotage' ? '💥 sabotage' : st2.act === 'assassinate' ? '🗡️ assassinate (biggest unit category)' : `⚔️ attack ×${st2.n}${st2.wins === false ? ' (loses)' : ''}`;
             sum += st2.kills;
             const li = el('li', '', `${st2.who}: ${what}${fort}${st2.kills ? ` · ~${Math.round(st2.kills)} killed · cap ${Math.min(100, Math.round((sum / Math.max(1, m.cap)) * 100))} %` : ''}`);
-            if (!capShown && sum > m.cap) {
-              li.appendChild(el('span', 'rqum-mass__cap', ` (cap of ${Math.round(m.cap)} reached: the next hits kill about 1 unit per type)`));
+            if (!capShown && m.cap > 0 && sum >= m.cap - 0.5) {
+              li.appendChild(el('span', 'rqum-mass__cap', m.afterCap
+                ? ` (cap of ${Math.round(m.cap)} reached: each attack won after it kills about ${m.afterCap}, 1 per unit row)`
+                : ` (cap of ${Math.round(m.cap)} reached: the next hits kill about 1 unit per unit row; spy them to know how many)`));
               capShown = true;
             }
             ol.appendChild(li);
@@ -1859,7 +2021,10 @@ RQUM.massView = (data, opts = {}) => {
         if (opts.massStart && Array.isArray(data.masses)) {
           const running = data.masses.find((x) => !x.ended && String(x.target_id) === tid);
           const bar = el('div', 'rqum-mass__start');
-          if (running) {
+          if (running?.scheduled && Date.parse(running.started_at) > Date.now()) {
+            const at = new Date(running.started_at);
+            bar.appendChild(el('span', 'rqum-muted', `📅 Mass scheduled by ${running.started_by || '?'} for ${at.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: hidden from the attack and spy lists until then (📜 Masses, above).`));
+          } else if (running) {
             bar.appendChild(el('span', 'rqum-muted', `⏳ Mass started by ${running.started_by || '?'} ${RQUM.formatAge(running.started_at)} ago: its report comes about 45 min after the last hit (📜 Masses, above).`));
           } else {
             const go = el('button', 'rqum-mass__start-btn', `🚀 Start mass on ${r.t.player_name || `#${tid}`}`);
@@ -1881,8 +2046,21 @@ RQUM.massView = (data, opts = {}) => {
               opts.reload?.();
             });
             bar.appendChild(go);
+            // "📅 Schedule mass" (leaders and the admin): a day and time, the members who can hit them.
+            if (opts.massSchedule) {
+              const sch = el('button', 'rqum-mass__sched-btn', schedOpen.has(tid) ? '📅 Schedule mass ▴' : '📅 Schedule mass');
+              sch.type = 'button';
+              sch.title = 'Pick a day, a time and the members: posted on Discord with a reminder 30 minutes before; the target is hidden from everyone\'s attack and spy lists until then';
+              sch.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (schedOpen.has(tid)) schedOpen.delete(tid); else schedOpen.set(tid, {});
+                draw();
+              });
+              bar.appendChild(sch);
+            }
           }
           cell.appendChild(bar);
+          if (!running && opts.massSchedule && schedOpen.has(tid)) cell.appendChild(scheduleForm(r, tid));
         }
       }
       det.appendChild(cell);
@@ -1909,7 +2087,7 @@ RQUM.massView = (data, opts = {}) => {
     `Kills per attack (the game's formula): units × 0.01 × dominance × turn bonus (10 turns: 1.09) × fort protection ÷ 3.17, dominance = 1 + 4 (r − 1) ÷ (r + 3) with r = offense ÷ defense. A lost attack still kills a little when the offense is above 60 % of the defense.`,
     `Fort protection: 0.05 with a full fort, 0.10 at half, 0.25 at 0 HP (in straight lines between): the lower their fort, the more each attack kills. With their fort's maximum HP (a spy report or their profile), the mass is played hit by hit. Each attack hits the fort for 10 × turns × min(2, offense ÷ defense) × (1 + the member's Siege Workshop bonus), less after each hit on it in 24 h (÷ (1 + 0.15 × hits), at least half); a fort at 0 HP adds 0.05 % of their units per won attack. Without the maximum HP, the fort stays as it is now.`,
     `Assassination: the most of 6 to 11 units and the assassin's Spy Academy share of the target's biggest unit category (level 2: 0.04 %, 3: 0.07 %, 4: 0.11 %, 5+: 0.15 %; from their last spy report), at most 100, × 80 % intensity (Dexterity and Vigilance not known). Sabotage kills no unit: it hits the fort for the most of 400–750 and the saboteur's Siege Workshop share of its maximum HP (level 1: 10 % … 10: 30 %), ÷ (1 + the sabotages before in 24 h), at most 2,000, and blocks the next tick's income.`,
-    `Cap: a defender loses at most 5 % of their units and ${MASS_DAY_CAP} in 24 h, all attacks and assassinations together: the goal of a mass is to reach it. The gauge shows how close each mass gets (orange from 70 %, green when reached; "≈": reached). Losses others gave them today are not known: their cap may be reached sooner.`,
+    `Cap: a defender loses at most 5 % of their units and ${MASS_DAY_CAP} in 24 h, all attacks and assassinations together: the goal of a mass is to reach it. After it, each attack won still kills about 1 unit per unit row of theirs (one type of one tier: the rows of their last spy report, or what a past mass report on them saw). The gauge shows how close each mass gets (orange from 70 %, green when reached; "≈": reached). Losses others gave them today are not known: their cap may be reached sooner.`,
     '📋 Order (under each target): the sabotages first, biggest Siege Workshops first (each next one does less); then the attacks, first those who hit the fort hard for the units they kill (an attack\'s fort damage stops growing at a ratio of 2, its kills do not), the biggest ratios last, once the fort is down and their protection up; the assassinations last (they do not depend on the fort). Each step shows the fort and the share of their cap reached. Without their fort\'s maximum HP the order changes nothing.',
     'To be more precise: a fresh spy report on them (their defense, spy defense, units, fort and its maximum HP: each target lists what it lacks under its line); every member playing with RQUM and opening the game now and then (their offense, turns, buildings and logs reach the database by themselves); our members\' Dexterity (not read yet). Never known: their Vigilance, the losses and fort hits other clans gave them today, the exact protection between the game\'s three points.',
     'Figures from RQUM: their defense, spy defense, fort and units from spy reports and profiles; our offense, spy offense, turns, Siege Workshop and Spy Academy from each member\'s own RQUM (every hour); what we did in 24 h from each member\'s Battle Logs and spy logs (every 30 minutes). The units counted are those of their last spy report (their army when there is none).',
@@ -1928,7 +2106,8 @@ RQUM.massReportsView = (masses, opts = {}) => {
   const running = masses.filter((m) => !m.ended);
   const done = masses.filter((m) => m.ended && m.report);
   box.open = running.length > 0;
-  box.appendChild(el('summary', '', `📜 Masses: ${running.length ? `${running.length} running · ` : ''}${done.length} report${done.length === 1 ? '' : 's'}`));
+  const ahead = running.filter((m) => m.scheduled && Date.parse(m.started_at) > Date.now()).length;
+  box.appendChild(el('summary', '', `📜 Masses: ${ahead ? `📅 ${ahead} scheduled · ` : ''}${running.length - ahead ? `${running.length - ahead} running · ` : ''}${done.length} report${done.length === 1 ? '' : 's'}`));
   const k = (v) => RQUM.formatNumber(Math.round(Number(v) || 0));
   const time = (iso, sec = true) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', ...(sec ? { second: '2-digit' } : {}) });
   const day = (iso) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -1939,7 +2118,35 @@ RQUM.massReportsView = (masses, opts = {}) => {
   if (!masses.length) box.appendChild(el('p', 'rqum-muted', 'No mass yet. "🚀 Start mass" under a target keeps its plan; a mass made without it (3 members or more, 8 attacks or more on one player) is found in the logs by itself. Its report comes about 45 minutes after the last hit.'));
   for (const m of running) {
     const line = el('div', 'rqum-mass__running');
-    line.appendChild(el('span', '', `⏳ ${m.target_name || `#${m.target_id}`}: started by ${m.started_by || '?'} ${RQUM.formatAge(m.started_at)} ago. Its report comes about 45 min after the last hit, once everyone's logs are read (no hit within 3 h: closed).`));
+    if (m.done_at) {
+      // "✅ Mass done": the report as soon as every member of its plan had their logs read since.
+      const waiting = Array.isArray(m.waiting) ? m.waiting : [];
+      line.appendChild(el('span', '', `✅ ${m.target_name || `#${m.target_id}`}: done (${m.done_by || '?'}, ${RQUM.formatAge(m.done_at)} ago). Its report comes as soon as everyone's logs are read${waiting.length ? `: waiting for ${waiting.join(', ')} (their RQUM reads them every 30 minutes while their game is open)` : ''}, 45 min after the last hit at the latest.`));
+    } else if (m.scheduled && Date.parse(m.started_at) > Date.now()) {
+      // 📅 Scheduled: its time, who with; the target held out of the attack and spy lists until then.
+      const at = new Date(m.started_at);
+      const members = m.plan?.members || [];
+      line.appendChild(el('span', '', `📅 ${m.target_name || `#${m.target_id}`}: ${day(m.started_at)}, ${time(m.started_at, false)} (in ${RQUM.formatAge(new Date(Date.now() - (at - Date.now())).toISOString())}), scheduled by ${m.started_by || '?'}${members.length ? ` · ${members.length} member${members.length === 1 ? '' : 's'}: ${members.join(', ')}` : ''}. Hidden from everyone's attack and spy lists until then; a reminder on Discord 30 minutes before.`));
+    } else {
+      line.appendChild(el('span', '', `⏳ ${m.target_name || `#${m.target_id}`}: started by ${m.started_by || '?'} ${RQUM.formatAge(m.started_at)} ago. Its report comes about 45 min after the last hit, once everyone's logs are read (no hit within 3 h: closed).`));
+      if (opts.massDone) {
+        const ok = el('button', 'rqum-mass__done-btn', '✅ Mass done');
+        ok.type = 'button';
+        ok.title = 'The mass is over: reads your logs now, and its report comes as soon as every member of it had their logs read, instead of 45 minutes after the last hit';
+        ok.addEventListener('click', async () => {
+          if (!confirm(`Is the mass on ${m.target_name} over? Your logs are read now and its report comes as soon as everyone's are.`)) return;
+          ok.disabled = true;
+          ok.textContent = '⏳ Reading your logs…';
+          try { await opts.massDone(m.id); } catch (err) {
+            ok.disabled = false;
+            ok.textContent = '✅ Mass done';
+            return opts.error?.(err.message);
+          }
+          opts.reload?.();
+        });
+        line.appendChild(ok);
+      }
+    }
     if (opts.massCancel) {
       const x = el('button', 'rqum-link-btn', '✕');
       x.type = 'button';
@@ -2028,6 +2235,272 @@ RQUM.massReportsView = (masses, opts = {}) => {
   return box;
 };
 
+// ---- Mass tab: a mass on me -------------------------------------------------------------------
+// "🛡️ Mass on me": the latest mass on the member, read from their logs (RQUM.warStats.massOnMe,
+// game pages only), summed up here and posted to Discord on request.
+// r: { from, to, hits: [{ at, who, player, held, gold, lost, killed, fort }],
+//      ops: [{ at, who, kind, ok, units, of, fort }] }.
+RQUM.massOnMeSummary = (r) => {
+  const sum = (a, k) => a.reduce((s, x) => s + (Number(x[k]) || 0), 0);
+  const sabos = r.ops.filter((o) => o.ok && o.kind === 'sabotage');
+  const assas = r.ops.filter((o) => o.ok && o.kind === 'assassinate');
+  const failed = r.ops.filter((o) => !o.ok && o.kind !== 'recon');
+  const recons = r.ops.filter((o) => o.kind === 'recon');
+  const by = new Map();
+  for (const h of r.hits) {
+    const a = by.get(h.player) || { who: h.who, attacks: 0, held: 0, gold: 0, lost: 0, killed: 0, fort: 0, first: h.at, last: h.at };
+    a.attacks += 1; a.held += h.held ? 1 : 0; a.gold += h.gold || 0; a.lost += h.lost || 0; a.killed += h.killed || 0; a.fort += h.fort || 0; a.last = h.at;
+    by.set(h.player, a);
+  }
+  const attackers = [...by.values()].sort((a, b) => b.gold - a.gold || b.lost - a.lost);
+  const t = {
+    attacks: r.hits.length, held: r.hits.filter((h) => h.held).length, attackers: attackers.length,
+    gold: sum(r.hits, 'gold'), lost: sum(r.hits, 'lost'), killed: sum(r.hits, 'killed'),
+    fortHits: sum(r.hits, 'fort'), fortUnknown: r.hits.filter((h) => h.fort == null).length,
+    fortSabo: sum(sabos, 'fort'), assassinated: sum(assas, 'units'),
+  };
+  // Found by the database for a member on RQUM before 1.3.2: their sabotages and assassinations by
+  // the hour only (no time, no fort damage).
+  t.hourly = !!r.ops_hours && !r.ops?.length;
+  if (t.hourly) t.assassinated += Number(r.ops_hours.assassinated) || 0;
+  t.sabotages = t.hourly ? Number(r.ops_hours.sabotages) || 0 : sabos.length;
+  t.assassinations = assas.length;
+  t.unitsLost = t.lost + t.assassinated;
+  t.fort = t.fortHits + t.fortSabo;
+  const s = Math.max(0, Math.round((Date.parse(r.to) - Date.parse(r.from)) / 1000));
+  t.duration = s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
+  // The biggest single hit on the gold.
+  t.topHit = [...r.hits].sort((a, b) => b.gold - a.gold)[0] || null;
+  return { attackers, sabos, assas, failed, recons, t };
+};
+
+// The Discord text (description of the embed; the title comes from the server: "Mass on <member>").
+RQUM.massOnMeText = (r) => {
+  const { attackers, sabos, assas, failed, recons, t } = RQUM.massOnMeSummary(r);
+  const k = (v) => RQUM.formatNumber(Math.round(Number(v) || 0));
+  const ts = (iso, f) => `<t:${Math.floor(Date.parse(iso) / 1000)}:${f}>`;
+  const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const lines = [
+    `${ts(r.from, 'f')} → ${ts(r.to, 'T')} (${t.duration}) · ${pl(t.attackers, 'attacker')} · **${t.attacks}** attacks (${t.held} held)${sabos.length ? ` · 💥 ${pl(sabos.length, 'sabotage')}` : ''}${assas.length ? ` · 🗡️ ${pl(assas.length, 'assassination')}` : ''}`,
+    `💀 **${k(t.unitsLost)}** units lost${t.assassinated ? ` (${k(t.lost)} in attacks · ${k(t.assassinated)} assassinated)` : ''} · ⚔️ ${k(t.killed)} of theirs killed`,
+    `💰 **${k(t.gold)}** gold taken${t.topHit?.gold ? ` (biggest hit: ${t.topHit.who}, ${k(t.topHit.gold)})` : ''}`,
+    `🏰 Fort −**${k(t.fort)}** HP${t.fortSabo ? ` (${k(t.fortHits)} from attacks · ${k(t.fortSabo)} from sabotages)` : ''}${t.fortUnknown ? ` (${t.fortUnknown} report${t.fortUnknown === 1 ? '' : 's'} not read)` : ''}`,
+    '',
+    ...attackers.map((a) => `**${a.who}**: ${a.attacks} atk${a.held ? ` (${a.held} held)` : ''} · ${k(a.gold)} gold · ${k(a.lost)} of mine killed · ${k(a.killed)} lost${a.fort ? ` · fort −${k(a.fort)}` : ''}`),
+  ];
+  const ops = [...sabos, ...assas, ...failed].sort((a, b) => (a.at < b.at ? -1 : 1));
+  if (ops.length) {
+    lines.push('', '🕵️ **Spy operations**');
+    for (const o of ops) {
+      lines.push(`${ts(o.at, 'T')} · ${o.who} · ${o.kind === 'sabotage' ? '💥 sabotage' : o.kind === 'assassinate' ? '🗡️ assassination' : o.kind}${o.ok
+        ? (o.kind === 'sabotage' ? ` · fort −${k(o.fort)} HP, income blocked` : o.units ? ` · −${k(o.units)} units${o.of ? ` (${o.of})` : ''}` : '')
+        : ' · stopped'}`);
+    }
+  }
+  if (recons.length) lines.push(`👁️ ${pl(recons.length, 'recon')} on me around it`);
+  return lines.join('\n');
+};
+
+// The button and the summary. opts.massOnMe() -> report or null; opts.massOnMePost(from, text);
+// opts.error(message).
+RQUM.massOnMeView = (opts = {}) => {
+  const box = el('div', 'rqum-mass__onme');
+  const btn = el('button', 'rqum-mass__onme-btn', '🛡️ Mass on me?');
+  btn.type = 'button';
+  btn.title = 'Reads your battle and spy logs of the last 24 hours and sums up the latest mass on you (8 attacks or more by 2 attackers or more hitting twice or more, no 15-minute gap)';
+  const out = el('div', 'rqum-mass__onme-body');
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    out.replaceChildren(el('p', 'rqum-muted', 'Reading your logs…'));
+    let r;
+    try { r = await opts.massOnMe(); } catch (err) {
+      btn.disabled = false;
+      out.replaceChildren();
+      return opts.error?.(err.message);
+    }
+    btn.disabled = false;
+    out.replaceChildren(r ? RQUM.massOnMeReport(r, opts) : el('p', 'rqum-muted', 'No mass on you in the last 24 hours (8 attacks or more by 2 attackers or more hitting twice or more, no 15-minute gap).'));
+  });
+  box.append(btn, out);
+  return box;
+};
+
+RQUM.massOnMeReport = (r, opts = {}) => {
+  const { attackers, sabos, assas, failed, recons, t } = RQUM.massOnMeSummary(r);
+  const k = (v) => RQUM.formatNumber(Math.round(Number(v) || 0));
+  const time = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const day = (iso) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const one = el('div', 'rqum-mass__report rqum-mass__onme-report');
+  one.appendChild(el('p', 'rqum-mass__report-when', `🛡️ ${opts.member ? `${opts.member} massed` : 'Massed'}: ${day(r.from)}, ${time(r.from)} → ${time(r.to)} (${t.duration}) · ${pl(t.attackers, 'attacker')} · ${t.attacks} attacks (${t.held} held)${t.sabotages ? ` · 💥 ${pl(t.sabotages, 'sabotage')}` : ''}${assas.length ? ` · 🗡️ ${pl(assas.length, 'assassination')}` : ''}`));
+  const tiles = el('div', 'rqum-mass__report-tiles');
+  const tile = (label, value, sub) => {
+    const d = el('div', 'rqum-mass__tile');
+    d.append(el('span', 'rqum-mass__tile-label', label), el('b', '', value));
+    if (sub) d.appendChild(el('span', 'rqum-muted', sub));
+    tiles.appendChild(d);
+  };
+  tile('💀 Units lost', k(t.unitsLost), t.assassinated ? `${k(t.lost)} in attacks · ${k(t.assassinated)} assassinated` : '');
+  tile('💰 Gold taken', k(t.gold), t.topHit?.gold ? `biggest: ${t.topHit.who}, ${k(t.topHit.gold)}` : '');
+  tile('🏰 Fort', `−${k(t.fort)} HP`, `${t.fortSabo ? `${k(t.fortHits)} attacks · ${k(t.fortSabo)} sabotages` : ''}${t.fortUnknown ? ` (${t.fortUnknown} report${t.fortUnknown === 1 ? '' : 's'} not read)` : ''}`);
+  tile('⚔️ Theirs killed', k(t.killed), `${t.held} of ${t.attacks} held`);
+  one.appendChild(tiles);
+  // Each attacker.
+  const tbl = el('table', 'rqum-hit__table rqum-mass__report-table');
+  const hr = el('tr');
+  ['Attacker', 'Attacks', 'Gold', 'Mine killed', 'Theirs lost', 'Fort', 'When'].forEach((h) => hr.appendChild(el('th', '', h)));
+  tbl.appendChild(el('thead')).appendChild(hr);
+  const tb = tbl.appendChild(el('tbody'));
+  for (const a of attackers) {
+    const row = el('tr');
+    row.append(el('td', '', a.who), el('td', '', a.held ? `${a.attacks} (${a.held} held)` : String(a.attacks)), el('td', '', k(a.gold)),
+      el('td', '', k(a.lost)), el('td', '', k(a.killed)), el('td', '', a.fort ? `−${k(a.fort)}` : '—'),
+      el('td', '', a.first === a.last ? time(a.first) : `${time(a.first)} → ${time(a.last)}`));
+    tb.appendChild(row);
+  }
+  const scroll = el('div', 'rqum-hit__scroll');
+  scroll.appendChild(tbl);
+  one.appendChild(scroll);
+  if (recons.length) one.appendChild(el('p', 'rqum-muted', `👁️ ${pl(recons.length, 'recon')} on you around it (${recons.map((o) => time(o.at)).join(', ')}).`));
+  // Every hit and spy operation, in time.
+  const events = [
+    ...r.hits.map((h) => ({ at: h.at, loss: !h.held, text: `${h.who}: ⚔️ ${h.held ? 'held' : 'lost'} · ${k(h.lost)} of mine killed · ${k(h.killed)} of theirs${h.gold ? ` · ${k(h.gold)} gold` : ''}${h.fort ? ` · fort −${k(h.fort)}` : ''}` })),
+    ...[...sabos, ...assas, ...failed].map((o) => ({ at: o.at, loss: o.ok, text: `${o.who}: ${o.kind === 'sabotage' ? '💥 sabotage' : o.kind === 'assassinate' ? '🗡️ assassination' : o.kind}${o.ok ? (o.kind === 'sabotage' ? ` · fort −${k(o.fort)} HP, income blocked` : o.units ? ` · −${k(o.units)} units${o.of ? ` (${o.of})` : ''}` : '') : ' · stopped'}` })),
+  ].sort((a, b) => (a.at < b.at ? -1 : 1));
+  const tl = el('details', 'rqum-mass__timeline');
+  tl.appendChild(el('summary', '', `⏱️ Hit by hit (${events.length})`));
+  const ol = el('ol');
+  for (const e of events) ol.appendChild(el('li', e.loss ? 'is-loss' : '', `${time(e.at)} · ${e.text}`));
+  tl.appendChild(ol);
+  one.appendChild(tl);
+  if (t.hourly && (t.sabotages || t.assassinated)) tl.appendChild(el('p', 'rqum-muted', `Their sabotages and assassinations are known by the hour only (RQUM before 1.3.2): ${t.sabotages} sabotage${t.sabotages === 1 ? '' : 's'}, ${k(r.ops_hours.assassinated)} units assassinated in the hours of the mass, not in this list.`));
+  // 📣 Post to Discord: the text above (Discord shows the times in each reader's own time).
+  if (opts.massOnMePost) {
+    const bar = el('div', 'rqum-mass__start');
+    const post = el('button', 'rqum-mass__start-btn', '📣 Post to Discord');
+    post.type = 'button';
+    post.title = 'Posts this summary in the RQUM Discord channel (once per mass)';
+    post.addEventListener('click', async () => {
+      if (!confirm('Post this summary of the mass on you to the RQUM Discord?')) return;
+      post.disabled = true;
+      try { await opts.massOnMePost(r.from, RQUM.massOnMeText(r)); } catch (err) {
+        post.disabled = false;
+        return opts.error?.(err.message);
+      }
+      post.textContent = '✅ Posted to Discord';
+      RQUM.toast?.('📣 Mass summary posted to Discord');
+    });
+    bar.appendChild(post);
+    one.appendChild(bar);
+  }
+  return one;
+};
+
+// "🛡️ Masses on us": the masses on our members the database found in their logs (rows of
+// rqum_masses_taken: { member, first_hit, last_hit, settled, report }), newest first. One box: the
+// totals, then three views (remembered in this browser): 📋 each mass (a click opens its
+// summary), ⚔️ each attacker's totals, 🛡️ each member's. The "🛡️ Mass on me?" button in it too.
+RQUM.massesTakenView = (rows, opts = {}) => {
+  const box = el('details', 'rqum-mass__reports rqum-mass__taken');
+  const k = (v) => RQUM.formatNumber(Math.round(Number(v) || 0));
+  const when = (iso) => new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const day = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const masses = rows.filter((row) => Array.isArray(row.report?.hits)).map((row) => {
+    const r = { ...row.report, ops: row.report.ops || [] };
+    return { row, r, ...RQUM.massOnMeSummary(r) };
+  });
+  box.appendChild(el('summary', '', `🛡️ Masses on us: ${rows.length}${rows.length ? `, last on ${rows[0].member || '?'} ${RQUM.formatAge(rows[0].last_hit)} ago` : ''}`));
+  if (opts.massOnMe) box.appendChild(RQUM.massOnMeView(opts));
+  if (!masses.length) {
+    box.appendChild(el('p', 'rqum-muted', 'None yet. A mass on a member (8 attacks or more by 2 attackers or more hitting twice or more, no gap over 15 minutes) is found in their logs by itself, once their RQUM read them (every 30 minutes while their game is open). Members without RQUM are never in it.'));
+    return box;
+  }
+  // The totals of every mass listed.
+  const all = masses.reduce((s, m) => ({ attacks: s.attacks + m.t.attacks, units: s.units + m.t.unitsLost, gold: s.gold + m.t.gold, fort: s.fort + m.t.fort, killed: s.killed + m.t.killed }),
+    { attacks: 0, units: 0, gold: 0, fort: 0, killed: 0 });
+  const oldest = masses[masses.length - 1].r.from;
+  box.appendChild(el('p', 'rqum-mass__taken-total', `Since ${day(oldest)}: ${masses.length} mass${masses.length === 1 ? '' : 'es'} · ${k(all.attacks)} attacks · 💀 ${k(all.units)} units lost · 💰 ${k(all.gold)} gold · 🏰 −${k(all.fort)} HP · ⚔️ ${k(all.killed)} of theirs killed`));
+
+  const VIEW_KEY = 'rqumMassTakenView';
+  let view = 'masses';
+  try { view = localStorage.getItem(VIEW_KEY) || 'masses'; } catch (_) { /* default */ }
+  const tabs = el('div', 'rqum-mass__views');
+  const body = el('div');
+  const table = (heads, lines) => {
+    const tbl = el('table', 'rqum-hit__table rqum-mass__report-table');
+    const hr = el('tr');
+    heads.forEach((h) => hr.appendChild(el('th', '', h)));
+    tbl.appendChild(el('thead')).appendChild(hr);
+    const tb = tbl.appendChild(el('tbody'));
+    for (const cells of lines) {
+      const tr = el('tr');
+      cells.forEach((c) => tr.appendChild(el('td', '', c)));
+      tb.appendChild(tr);
+    }
+    const scroll = el('div', 'rqum-hit__scroll');
+    scroll.appendChild(tbl);
+    return scroll;
+  };
+  const draw = () => {
+    tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b.dataset.view === view));
+    body.replaceChildren();
+    if (view === 'attackers') {
+      // Each attacker over every mass: in how many, their hits, what they took and killed.
+      const by = new Map();
+      for (const m of masses) {
+        for (const h of m.r.hits) {
+          const a = by.get(h.player) || { who: h.who, masses: new Set(), attacks: 0, held: 0, gold: 0, lost: 0, killed: 0, fort: 0, last: h.at };
+          a.masses.add(m.row.id ?? m.r.from); a.attacks += 1; a.held += h.held ? 1 : 0; a.gold += h.gold || 0; a.lost += h.lost || 0; a.killed += h.killed || 0; a.fort += h.fort || 0;
+          if (h.at > a.last) { a.last = h.at; a.who = h.who; }
+          by.set(h.player, a);
+        }
+      }
+      const list = [...by.values()].sort((a, b) => b.lost - a.lost || b.gold - a.gold);
+      body.appendChild(table(['Attacker', 'Masses', 'Attacks', 'Mine killed', 'Gold', 'Theirs lost', 'Fort', 'Last'],
+        list.map((a) => [a.who, String(a.masses.size), a.held ? `${a.attacks} (${a.held} held)` : String(a.attacks), k(a.lost), k(a.gold), k(a.killed), a.fort ? `−${k(a.fort)}` : '—', day(a.last)])));
+    } else if (view === 'members') {
+      // Each member massed: how often and what it cost them.
+      const by = new Map();
+      for (const m of masses) {
+        const name = m.row.member || '?';
+        const a = by.get(name) || { name, masses: 0, attacks: 0, units: 0, gold: 0, fort: 0, killed: 0, last: m.r.from };
+        a.masses += 1; a.attacks += m.t.attacks; a.units += m.t.unitsLost; a.gold += m.t.gold; a.fort += m.t.fort; a.killed += m.t.killed;
+        if (m.r.from > a.last) a.last = m.r.from;
+        by.set(name, a);
+      }
+      const list = [...by.values()].sort((a, b) => b.masses - a.masses || b.units - a.units);
+      body.appendChild(table(['Member', 'Masses', 'Attacks', 'Units lost', 'Gold lost', 'Fort', 'Theirs killed', 'Last'],
+        list.map((a) => [a.name, String(a.masses), String(a.attacks), k(a.units), k(a.gold), a.fort ? `−${k(a.fort)}` : '—', k(a.killed), day(a.last)])));
+    } else {
+      for (const { row, r, t } of masses) {
+        const one = el('details', 'rqum-mass__report');
+        one.appendChild(el('summary', '', `🛡️ ${row.member || '?'} · ${when(r.from)} · ${t.attacks} attacks by ${t.attackers} · ${k(t.unitsLost)} units lost · ${k(t.gold)} gold${row.settled ? '' : ' · ⏳ may still grow'}`));
+        // Drawn when opened.
+        one.addEventListener('toggle', () => {
+          if (!one.open || one.dataset.drawn) return;
+          one.dataset.drawn = '1';
+          one.appendChild(RQUM.massOnMeReport(r, { member: row.member }));
+        });
+        body.appendChild(one);
+      }
+    }
+  };
+  for (const [key, label] of [['masses', '📋 Masses'], ['attackers', '⚔️ By attacker'], ['members', '🛡️ By member']]) {
+    const b = el('button', '', label);
+    b.type = 'button';
+    b.dataset.view = key;
+    b.addEventListener('click', () => {
+      view = key;
+      try { localStorage.setItem(VIEW_KEY, key); } catch (_) { /* not kept */ }
+      draw();
+    });
+    tabs.appendChild(b);
+  }
+  box.append(tabs, body);
+  draw();
+  return box;
+};
+
 // ---- Active Time tab: when players play ------------------------------------------------------
 // Every action RQUM knows with its hour, from the members' war statistics (rqum_war_clan):
 // an enemy's attacks on any member (their activity), a member's own attacks, assassinations,
@@ -2035,6 +2508,83 @@ RQUM.massReportsView = (masses, opts = {}) => {
 // player (darker = more actions), a click opens their week × hour heatmap and their usual hours.
 // data: { members: rows of rqum_war_clan, tgo: Set of TGO ids, clan: Set of RQUM member ids }.
 const ACTIVE_KEY = 'rqumActiveView';
+// ---- Threats tab ---------------------------------------------------------------------
+// The players outside RQUM who can attack me: in range (10 levels either way) and their offense
+// above my defense; a button shows the others in range too (offense too low, or not known). For
+// each: their attacks on me in the last 24 h (my Battle Logs, to the second) and when their next
+// attack on me is possible (5 a day on a target, each slot back 24 h after its attack).
+// data: { players: rqum_players_table rows, me: { id, level, def }, attackers: my war stats'
+// attackers ({ id: { recent: [{ at }] } }) }; opts.pick(id, name) opens a card.
+let threatsShowAll = false;
+RQUM.threatsView = (data, opts = {}) => {
+  const wrap = el('div', 'rqum-threats');
+  const { me } = data;
+  if (!me?.level || !me?.def) {
+    wrap.appendChild(el('p', 'rqum-muted', 'Your level and defense are not known yet: open your Dashboard and your Battle Logs once with RQUM on.'));
+    return wrap;
+  }
+  const now = Date.now();
+  const v = (s, k) => (s?.[k]?.v == null ? null : Number(s[k].v));
+  const rows = [];
+  for (const p of data.players || []) {
+    const id = String(p.player_id);
+    if (id === String(me.id)) continue;
+    const st = p.stats || {};
+    if (/rqum/i.test(String(st.clan?.v || ''))) continue;
+    const level = v(st, 'level');
+    if (level == null || Math.abs(level - me.level) > 10) continue;
+    const off = v(st, 'total_offense');
+    // Their attacks on me in the last 24 h, oldest first.
+    const hits = (data.attackers?.[id]?.recent || []).map((e) => Date.parse(e.at)).filter((t) => t > now - 24 * 3600000).sort((a, b) => a - b);
+    const used = Math.min(hits.length, MASS_ATTACKS);
+    // Next attack possible: now while they have attacks left; else when the oldest of the last 5 is 24 h old.
+    const next = hits.length < MASS_ATTACKS ? now : hits[hits.length - MASS_ATTACKS] + 24 * 3600000;
+    rows.push({ id, name: p.player_name || `#${id}`, clan: st.clan?.v, level, off, can: off != null && off > me.def, hits, used, next, seen: st.total_offense?.at });
+  }
+  const can = rows.filter((r) => r.can).sort((a, b) => b.off - a.off);
+  const others = rows.filter((r) => !r.can).sort((a, b) => (b.off ?? -1) - (a.off ?? -1));
+  const time = (t) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const inTime = (ms) => { const m = Math.ceil(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}m`; };
+  const head = el('p', 'rqum-muted', `${can.length} player${can.length === 1 ? '' : 's'} outside RQUM can attack you: in range (levels ${me.level - 10} to ${me.level + 10}) and their offense above your defense of ${RQUM.formatNumber(me.def)}.`);
+  const table = (list) => {
+    const t = el('table', 'rqum-table rqum-threats__table');
+    const hr = el('tr');
+    for (const [h, title] of [['Player'], ['Lvl'], ['Offense', 'Their offense as last seen by RQUM'], ['Ratio', 'Their offense ÷ your defense'], ['24h', 'Their attacks on you in the last 24 hours (your Battle Logs), of 5'], ['Next', 'When their next attack on you is possible (5 a day on a target, each one back 24 h after it)']]) {
+      const th = el('th', '', h);
+      if (title) th.title = title;
+      hr.appendChild(th);
+    }
+    t.appendChild(hr);
+    for (const r of list) {
+      const tr = el('tr', r.can ? 'is-threat' : '');
+      const name = el('td', 'rqum-list__name', RQUM.withClan(r.name, r.clan));
+      name.style.cursor = 'pointer';
+      name.addEventListener('click', () => opts.pick?.(r.id, r.name));
+      const off = el('td', '', r.off == null ? '?' : RQUM.formatNumber(r.off));
+      if (r.seen) off.title = `Seen ${RQUM.formatAge(r.seen)} ago`;
+      const ratio = el('td', r.can ? 'is-win' : '', r.off == null ? '–' : (r.off / me.def).toFixed(2));
+      const used = el('td', r.used >= MASS_ATTACKS ? 'is-full' : '', `${r.used}/${MASS_ATTACKS}`);
+      if (r.hits.length) used.title = r.hits.map(time).join(', ');
+      const next = el('td', '', r.next <= now ? 'now' : `${time(r.next)} (in ${inTime(r.next - now)})`);
+      tr.append(name, el('td', '', String(r.level)), off, ratio, used, next);
+      t.appendChild(tr);
+    }
+    return t;
+  };
+  const toggle = el('button', 'rqum-btn rqum-btn--inline', '');
+  toggle.type = 'button';
+  const othersBox = el('div');
+  const draw = () => {
+    toggle.textContent = threatsShowAll ? `Hide the ${others.length} others in range` : `Show the ${others.length} others in range (offense too low or not known)`;
+    othersBox.replaceChildren(...(threatsShowAll && others.length ? [table(others)] : []));
+  };
+  toggle.addEventListener('click', () => { threatsShowAll = !threatsShowAll; draw(); });
+  draw();
+  wrap.append(head, can.length ? table(can) : el('p', 'rqum-muted', 'Nobody: no player known to RQUM outside the alliance beats your defense.'), toggle, othersBox,
+    el('p', 'rqum-muted', 'Offense as last seen by RQUM (spy reports, profiles, battles): it may have grown since. Attacks on you from your own Battle Logs, read by RQUM every 30 minutes (⟳ reads them now).'));
+  return wrap;
+};
+
 RQUM.activeView = (data, opts = {}) => {
   let state = { who: 'tgo', days: 30, q: '' };
   try { state = { ...state, ...JSON.parse(localStorage.getItem(ACTIVE_KEY) || '{}') }; } catch (_) { /* storage off */ }
@@ -2066,6 +2616,7 @@ RQUM.activeView = (data, opts = {}) => {
     }
   }
   const wrap = el('div', 'rqum-active');
+  wrap.appendChild(RQUM.freshLine(data.members, opts.reload));
   const bar = el('div', 'rqum-daily__bar');
   const who = el('select');
   for (const [k, label] of [['tgo', 'TGO'], ['clan', 'RQUM members'], ['all', 'Everyone known']]) who.appendChild(new Option(label, k));
@@ -2265,6 +2816,7 @@ RQUM.warRoomView = (data, opts = {}) => {
   }
 
   const wrap = el('div', 'rqum-war-room');
+  wrap.appendChild(RQUM.freshLine(data.members, opts.reload));
   // The parts and the periods as the Ranking tab's buttons.
   const bar = el('div', 'rqum-war-room__bar');
   const parts = el('div', 'rqum-ranking__tabs');

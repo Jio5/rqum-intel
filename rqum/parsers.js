@@ -407,7 +407,6 @@
     [/^(total\s*)?gold\s*lo(st|ss)$/i, 'gold_lost'],
     [/^units\s*lost$/i, 'units_lost'],
     [/^units\s*killed$/i, 'units_killed'],
-    [/^k\s*\/?\s*d(\s*ratio)?\s*:?$/i, 'kd_ratio'],
   ];
   // Boxes about another player, or not from the game.
   const NOT_MINE = `${FOREIGN}, .player-profile-page, .intel-report-page, .battle-report, table, .rqum-panel`;
@@ -461,6 +460,9 @@
         read(txt(box.querySelector(labelSel)), box.querySelector(valueSel));
       });
     }
+    // K/D: never read as shown (some pages show another K/D, a period's or a battle's, which
+    // was taken for the overall one); units killed ÷ units lost of the Casualty Summary.
+    if (stats.units_killed >= 0 && stats.units_lost > 0) stats.kd_ratio = Math.round(stats.units_killed / stats.units_lost * 100) / 100;
     // Dashboard's Fort Status: "100%".
     const fort = doc.querySelector('.fort-status-display [data-dash-pct]');
     const fortPct = fort && !fort.closest(NOT_MINE) ? parseValue(txt(fort).replace('%', '')) : null;
