@@ -998,6 +998,8 @@ table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 
 .rqum-mass__reports { margin: 0 0 10px; padding: 4px 8px; font-size: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 6px; }
 .rqum-mass__reports > summary { cursor: pointer; font-weight: 600; color: var(--rqum-accent, #d4a24c); }
 .rqum-mass__running { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; padding: 4px 8px; background: rgba(245,158,11,.1); border-left: 3px solid #f59e0b; border-radius: 4px; }
+.rqum-range__as { display: block; margin: 0 0 8px; }
+.rqum-range__as select { margin-left: 4px; }
 .rqum-mass__copy { display: inline-block; margin: 2px 0 6px; }
 .rqum-mass__who {flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 0 2px; }
 .rqum-mass__who-one { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; }

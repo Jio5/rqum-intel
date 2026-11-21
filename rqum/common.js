@@ -1539,6 +1539,21 @@ RQUM.massView = (data, opts = {}) => {
     try { localStorage.setItem(OUT_KEY, JSON.stringify(outBy)); } catch (_) { /* not kept */ }
     draw();
   };
+  // What each ticked member does in a target's mass: everything (default), attacks only, spy
+  // operations only, or the sabotage only (remembered in this browser: { targetId: { memberId: role } }).
+  const ROLE_KEY = 'rqumMassRoleBy';
+  const ROLES = [['', '⚔️ + 🕵️ All'], ['atk', '⚔️ Attacks only'], ['spy', '🕵️ Spy ops only'], ['sabo', '💥 Sabotage only']];
+  let roleBy = {};
+  try { roleBy = JSON.parse(localStorage.getItem(ROLE_KEY) || '{}') || {}; } catch (_) { /* none */ }
+  const roleOf = (tid, mid) => roleBy[tid]?.[mid] || '';
+  const setRole = (tid, mid, role) => {
+    const m = { ...(roleBy[tid] || {}) };
+    if (role) m[mid] = role; else delete m[mid];
+    if (Object.keys(m).length) roleBy[tid] = m; else delete roleBy[tid];
+    try { localStorage.setItem(ROLE_KEY, JSON.stringify(roleBy)); } catch (_) { /* not kept */ }
+    fewCache.clear();
+    draw();
+  };
   // "📅 Schedule mass" (leaders and the admin): the forms open (kept while the tab redraws, as when
   // a member is ticked) with their day and time.
   const schedOpen = new Map();
@@ -1703,12 +1718,19 @@ RQUM.massView = (data, opts = {}) => {
         readyAt = Math.max(readyAt, back);
         // Attacks left now: 5 a day on a target, and the turns they have (10 an attack) when known.
         const left = Math.max(0, MASS_ATTACKS - day.attacks);
-        const attacks = m.turns != null ? Math.min(left, Math.floor(m.turns / MASS_TURNS)) : left;
+        const role = roleOf(tid, m.id);
+        const hits = role === 'spy' || role === 'sabo' ? 0 : left;
+        const attacks = m.turns != null ? Math.min(hits, Math.floor(m.turns / MASS_TURNS)) : hits;
+        // Their role in this mass (attacks only, spy ops only, sabotage only): what they may do.
+        const mayHit = role !== 'spy' && role !== 'sabo';
+        const mayAssa = role === '' || role === 'spy';
+        const maySabo = role !== 'atk';
         // A floor: their defense is above it, so beating it is not sure.
         const beats = def && m.off != null ? m.off > def.v : null;
         const spyOk = sdef && m.spy != null ? m.spy > sdef.v : null;
         return { ...m, day, back, attacks, ratio: def && m.off != null ? m.off / def.v : null, beats, sure: beats && !def.floor,
-          spyOk, canAssassinate: spyOk && !day.assassinations, canSabotage: spyOk && !day.sabotages, out: isOut(tid, m.id) };
+          spyOk, canAssassinate: spyOk && mayAssa && !day.assassinations, canSabotage: spyOk && maySabo && !day.sabotages, out: isOut(tid, m.id),
+          role, mayHit, mayAssa, maySabo };
       }).sort((a, b) => (b.ratio || 0) - (a.ratio || 0));
       const attackers = everyone.filter((a) => !a.out);
       const winners = attackers.filter((a) => a.beats);
@@ -1794,7 +1816,7 @@ RQUM.massView = (data, opts = {}) => {
           total: Math.min(cap, fromAttacks + fromAssassins) + afterCapKills, capped: fromAttacks + fromAssassins >= cap && cap > 0 };
       }
       // Full: everyone with their 5 attacks, assassination and sabotage (once the last 24 h are over).
-      const FULL = [() => MASS_ATTACKS, (a) => a.spyOk, (a) => a.spyOk, { attacks: 0, killed: 0, sabotages: 0 }];
+      const FULL = [(a) => (a.mayHit ? MASS_ATTACKS : 0), (a) => a.spyOk && a.mayAssa, (a) => a.spyOk && a.maySabo, { attacks: 0, killed: 0, sabotages: 0 }];
       const full = simulate(attackers, ...FULL);
       // Now: the attacks each one has left (and their turns), what is left of the cap.
       const NOW = [(a) => a.attacks, (a) => a.canAssassinate, (a) => a.canSabotage, done];
@@ -2004,7 +2026,7 @@ RQUM.massView = (data, opts = {}) => {
         const th0 = el('th');
         th0.appendChild(allIn);
         h2.appendChild(th0);
-        ['Member', 'Lv', 'Offense', 'Ratio', 'Wins?', 'Attacks left', 'Spy'].forEach((h) => h2.appendChild(el('th', '', h)));
+        ['Member', 'Lv', 'Offense', 'Ratio', 'Wins?', 'Attacks left', 'Spy', 'Does'].forEach((h) => h2.appendChild(el('th', '', h)));
         t2.appendChild(el('thead')).appendChild(h2);
         const b2 = t2.appendChild(el('tbody'));
         for (const a of r.everyone) {
@@ -2026,6 +2048,21 @@ RQUM.massView = (data, opts = {}) => {
             el('td', a.beats ? 'is-win' : a.beats === false ? 'is-loss' : '', a.beats == null ? '?' : a.beats ? (a.sure ? '✓' : '✓?') : '✗'),
             el('td', '', `${a.attacks}${a.day.attacks ? ` (${a.day.attacks} used, all back ${new Date(a.back).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })})` : ''}${a.turns != null && a.turns < MASS_TURNS * MASS_ATTACKS ? ` · ${a.turns} turns` : ''}`),
             el('td', a.spyOk ? 'is-win' : '', a.spyOk == null ? '?' : a.spyOk ? `${a.canAssassinate ? '🗡️' : '·'}${a.canSabotage ? '💥' : '·'}` : '✗'));
+          // What they do in this mass: everything, attacks only, spy ops only, the sabotage only.
+          const does = el('select', 'rqum-mass__role');
+          for (const [v, label] of ROLES) {
+            const o = el('option', '', label);
+            o.value = v;
+            o.selected = a.role === v;
+            does.appendChild(o);
+          }
+          does.title = `What ${a.name} does in this mass (the orders and figures follow)`;
+          does.disabled = a.out;
+          does.addEventListener('click', (e) => e.stopPropagation());
+          does.addEventListener('change', () => setRole(tid, a.id, does.value));
+          const c8 = el('td');
+          c8.appendChild(does);
+          row.appendChild(c8);
           b2.appendChild(row);
         }
         cell.appendChild(t2);
@@ -2122,23 +2159,32 @@ RQUM.massView = (data, opts = {}) => {
         if (opts.massStart && Array.isArray(data.masses)) {
           const running = data.masses.find((x) => !x.ended && String(x.target_id) === tid);
           const bar = el('div', 'rqum-mass__start');
-          if (running?.scheduled && Date.parse(running.started_at) > Date.now()) {
+          const ahead = running?.scheduled && Date.parse(running.started_at) > Date.now();
+          if (ahead) {
             const at = new Date(running.started_at);
-            bar.appendChild(el('span', 'rqum-muted', `📅 Mass scheduled by ${running.started_by || '?'} for ${at.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: hidden from the attack and spy lists from 24 hours before (📜 Masses, above).`));
-          } else if (running) {
-            bar.appendChild(el('span', 'rqum-muted', `⏳ Mass started by ${running.started_by || '?'} ${RQUM.formatAge(running.started_at)} ago: its report comes about 45 min after the last hit (📜 Masses, above).`));
-          } else {
-            const go = el('button', 'rqum-mass__start-btn', `🚀 Start mass on ${r.t.player_name || `#${tid}`}`);
+            bar.appendChild(el('span', 'rqum-muted', `📅 Mass scheduled by ${running.started_by || '?'} for ${at.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: hidden from the attack and spy lists from 24 hours before (📜 Masses, above). `));
+          }
+          // A scheduled mass whose time is past (not done): it can still take the order now as its plan.
+          const late = running?.scheduled && !ahead && !running.done_at;
+          if (running && !ahead) {
+            bar.appendChild(el('span', 'rqum-muted', `${late ? '📅 Scheduled mass' : '⏳ Mass'} started by ${running.started_by || '?'} ${RQUM.formatAge(running.started_at)} ago: its report comes about 45 min after the last hit (📜 Masses, above). `));
+          }
+          if (!running || ahead || late) {
+            const go = el('button', 'rqum-mass__start-btn', late ? '🚀 Start with the order now' : `🚀 Start mass on ${r.t.player_name || `#${tid}`}${ahead ? ' now' : ''}`);
             go.type = 'button';
-            go.title = 'Keeps this mass (the ticked members and the order now) to compare with what is done: a detailed report comes once the hits are read from everyone\'s logs, here and on Discord';
+            go.title = `Keeps this mass (the ticked members, what each does and the order now) to compare with what is done: a detailed report comes once the hits are read from everyone's logs, here and on Discord${ahead ? '. The scheduled mass starts now instead, with this order' : late ? '. The scheduled mass keeps its start and takes this order instead of the one it was scheduled with' : ''}`;
             go.addEventListener('click', async () => {
-              if (!confirm(`Start a mass on ${r.t.player_name}? Its report (each member's hits, units killed, fort, cap) comes once the hits are read.`)) return;
+              if (!confirm(ahead
+                ? `Start the mass on ${r.t.player_name} now, instead of at its scheduled time? Its order becomes the order now of the ticked members.`
+                : late ? `Give the mass on ${r.t.player_name} the order now of the ticked members (its report is compared with it)?`
+                : `Start a mass on ${r.t.player_name}? Its report (each member's hits, units killed, fort, cap) comes once the hits are read.`)) return;
               const n = r.lean?.now || r.now;
               const plan = {
                 fewestTurns: !!r.lean?.now,
                 total: Math.round(n.total), reach: Math.round(n.fromAttacks + n.fromAssassins), cap: Math.round(n.cap),
                 fortStart: n.fortSim ? Math.round(n.fortSim.startHp) : null, fortEnd: n.fortSim ? Math.round(n.fortSim.endHp) : null, fortMax: r.fortMax || null,
                 members: r.attackers.map((a) => a.name),
+                roles: Object.fromEntries(r.attackers.filter((a) => a.role).map((a) => [a.name, a.role])),
                 steps: n.steps.map((s) => ({ who: s.who, act: s.act, n: s.n, kills: Math.round(s.kills || 0), to: s.to != null ? Math.round(s.to) : null })),
               };
               go.disabled = true;
@@ -2148,7 +2194,7 @@ RQUM.massView = (data, opts = {}) => {
             });
             bar.appendChild(go);
             // "📅 Schedule mass" (leaders and the admin): a day and time, the members who can hit them.
-            if (opts.massSchedule) {
+            if (opts.massSchedule && !running) {
               const sch = el('button', 'rqum-mass__sched-btn', schedOpen.has(tid) ? '📅 Schedule mass ▴' : '📅 Schedule mass');
               sch.type = 'button';
               sch.title = 'Pick a day, a time and the members: posted on Discord with a reminder 30 minutes before; the target is hidden from everyone\'s attack and spy lists from 24 hours before';
@@ -2334,19 +2380,53 @@ RQUM.massReportsView = (masses, opts = {}) => {
       });
       one.appendChild(post);
     }
-    // (No comparison with the plan: it is the order as scheduled, which changes before the mass; the cap is the measure.)
-    // Each member's figures.
+    // Compared with its order: only a mass started with "🚀 Start mass" (its order now, of the ticked
+    // members); a scheduled one's plan is the order as scheduled, which changes before the mass.
+    const planned = new Map();
+    const steps = !m.auto && !m.plan?.scheduled && Array.isArray(m.plan?.steps) ? m.plan.steps : null;
+    for (const s of steps || []) {
+      const p = planned.get(s.who) || { attacks: 0, sabo: 0, assa: 0, kills: 0 };
+      if (s.act === 'attack') p.attacks += Number(s.n) || 0;
+      else if (s.act === 'sabotage') p.sabo += 1;
+      else if (s.act === 'assassinate') p.assa += 1;
+      p.kills += Number(s.kills) || 0;
+      planned.set(s.who, p);
+    }
+    if (steps) {
+      const want = Number(m.plan.reach ?? m.plan.total) || 0;
+      tiles.appendChild((() => {
+        const d = el('div', `rqum-mass__tile ${kills >= want ? 'is-full' : ''}`);
+        d.append(el('span', 'rqum-mass__tile-label', '📋 Vs the order'), el('b', '', `${k(kills)} / ~${k(want)}`),
+          el('span', 'rqum-muted', `${want ? Math.round((kills / want) * 100) : 100} % of the units its order planned`));
+        return d;
+      })());
+    }
+    // Each member's figures (and what the order planned for them).
     const tbl = el('table', 'rqum-hit__table rqum-mass__report-table');
     const hr = el('tr');
-    ['Member', 'Attacks', 'Killed', 'Lost', 'Gold', 'Fort', '💥', '🗡️'].forEach((h) => hr.appendChild(el('th', '', h)));
+    ['Member', 'Attacks', 'Killed', 'Lost', 'Gold', 'Fort', '💥', '🗡️', ...(steps ? ['📋 Planned'] : [])].forEach((h) => hr.appendChild(el('th', '', h)));
     tbl.appendChild(el('thead')).appendChild(hr);
     const tb = tbl.appendChild(el('tbody'));
+    const planText = (p) => (p ? [p.attacks ? `⚔️ ${p.attacks}` : '', p.sabo ? '💥' : '', p.assa ? '🗡️' : '', p.kills ? `~${k(p.kills)}` : ''].filter(Boolean).join(' ') : '—');
+    const shown = new Set();
     for (const x of r.members || []) {
       const row = el('tr');
+      shown.add(x.name);
+      const p = planned.get(x.name);
+      const short = p && ((Number(x.attacks) || 0) < p.attacks || (Number(x.sabotages) || 0) < p.sabo || (Number(x.assassinations) || 0) < p.assa);
       row.append(el('td', '', x.name), el('td', '', x.attacks ? `${x.attacks} (${x.wins} W)` : '—'),
         el('td', '', k((Number(x.killed) || 0) + (Number(x.assassinated) || 0))), el('td', '', k(x.lost)), el('td', '', k(x.gold)),
         el('td', '', x.fort ? `−${k(x.fort)}${x.fort_approx ? '≈' : ''}` : '—'),
         el('td', '', x.sabotages ? String(x.sabotages) : ''), el('td', '', x.assassinations ? `${x.assassinations} (${k(x.assassinated)})` : ''));
+      if (steps) row.appendChild(el('td', short ? 'is-loss' : '', planText(p)));
+      tb.appendChild(row);
+    }
+    // In the order but nothing of theirs read.
+    for (const [who, p] of planned) {
+      if (shown.has(who)) continue;
+      const row = el('tr', 'is-out');
+      row.append(el('td', '', who), el('td', '', '—'), el('td', '', '—'), el('td', '', ''), el('td', '', ''), el('td', '', ''), el('td', '', ''), el('td', '', ''), el('td', 'is-loss', planText(p)));
+      row.title = 'In the order, but no hit or spy operation of theirs read';
       tb.appendChild(row);
     }
     const scroll = el('div', 'rqum-hit__scroll');
