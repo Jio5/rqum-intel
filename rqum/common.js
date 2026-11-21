@@ -1539,21 +1539,12 @@ RQUM.massView = (data, opts = {}) => {
     try { localStorage.setItem(OUT_KEY, JSON.stringify(outBy)); } catch (_) { /* not kept */ }
     draw();
   };
-  // What each ticked member does in a target's mass: everything (default), attacks only, spy
-  // operations only, or the sabotage only (remembered in this browser: { targetId: { memberId: role } }).
+  // What each member in a target's mass does: everything (default) or the spy ops only ('spy':
+  // sabotage, assassination). Remembered in this browser: { targetId: { memberId: 'spy' } }.
   const ROLE_KEY = 'rqumMassRoleBy';
-  const ROLES = [['', '⚔️ + 🕵️ All'], ['atk', '⚔️ Attacks only'], ['spy', '🕵️ Spy ops only'], ['sabo', '💥 Sabotage only']];
   let roleBy = {};
   try { roleBy = JSON.parse(localStorage.getItem(ROLE_KEY) || '{}') || {}; } catch (_) { /* none */ }
-  const roleOf = (tid, mid) => roleBy[tid]?.[mid] || '';
-  const setRole = (tid, mid, role) => {
-    const m = { ...(roleBy[tid] || {}) };
-    if (role) m[mid] = role; else delete m[mid];
-    if (Object.keys(m).length) roleBy[tid] = m; else delete roleBy[tid];
-    try { localStorage.setItem(ROLE_KEY, JSON.stringify(roleBy)); } catch (_) { /* not kept */ }
-    fewCache.clear();
-    draw();
-  };
+  const roleOf = (tid, mid) => (roleBy[tid]?.[mid] === 'spy' ? 'spy' : '');
   // "📅 Schedule mass" (leaders and the admin): the forms open (kept while the tab redraws, as when
   // a member is ticked) with their day and time.
   const schedOpen = new Map();
@@ -2022,47 +2013,56 @@ RQUM.massView = (data, opts = {}) => {
         allIn.checked = r.everyone.every((a) => !a.out);
         allIn.indeterminate = !allIn.checked && r.everyone.some((a) => !a.out);
         allIn.title = 'Everyone in this mass / nobody';
-        allIn.addEventListener('change', () => setOut(tid, allIn.checked ? [] : r.everyone.map((a) => a.id)));
+        allIn.addEventListener('change', () => {
+          delete roleBy[tid];
+          try { localStorage.setItem(ROLE_KEY, JSON.stringify(roleBy)); } catch (_) { /* not kept */ }
+          fewCache.clear();
+          setOut(tid, allIn.checked ? [] : r.everyone.map((a) => a.id));
+        });
         const th0 = el('th');
         th0.appendChild(allIn);
         h2.appendChild(th0);
-        ['Member', 'Lv', 'Offense', 'Ratio', 'Wins?', 'Attacks left', 'Spy', 'Does'].forEach((h) => h2.appendChild(el('th', '', h)));
+        const thSpy = el('th', '', '🕵️');
+        thSpy.title = 'Spy ops only (sabotage, assassination): untick the first box, keep this one';
+        h2.appendChild(thSpy);
+        ['Member', 'Lv', 'Offense', 'Ratio', 'Wins?', 'Attacks left', 'Spy'].forEach((h) => h2.appendChild(el('th', '', h)));
         t2.appendChild(el('thead')).appendChild(h2);
         const b2 = t2.appendChild(el('tbody'));
         for (const a of r.everyone) {
           const row = el('tr', a.out ? 'is-out' : '');
           // In this target's mass or not (untick: left out of its figures and orders).
+          // Two boxes: everything (attacks and spy ops), or the spy ops only (sabotage, assassination);
+          // both unticked: left out of this mass.
           const box = el('input');
           box.type = 'checkbox';
-          box.checked = !a.out;
-          box.title = a.out ? `${a.name} is left out of this mass: tick to count them` : `Untick to leave ${a.name} out of this mass`;
-          box.addEventListener('change', () => {
+          box.checked = !a.out && a.role !== 'spy';
+          box.title = box.checked ? `${a.name} does everything: untick for the spy ops only` : `Tick: ${a.name} does everything (attacks and spy ops)`;
+          const spyBox = el('input');
+          spyBox.type = 'checkbox';
+          spyBox.checked = !a.out;
+          spyBox.disabled = box.checked;
+          spyBox.title = box.checked ? 'Untick the first box for the spy ops only' : spyBox.checked ? `${a.name} does the spy ops only (sabotage, assassination): untick to leave them out` : `Tick: ${a.name} does the spy ops only (sabotage, assassination)`;
+          const apply = (out, role) => {
             const ids = new Set(outBy[tid] || []);
-            if (box.checked) ids.delete(a.id); else ids.add(a.id);
+            if (out) ids.add(a.id); else ids.delete(a.id);
+            const m = { ...(roleBy[tid] || {}) };
+            if (role) m[a.id] = role; else delete m[a.id];
+            if (Object.keys(m).length) roleBy[tid] = m; else delete roleBy[tid];
+            try { localStorage.setItem(ROLE_KEY, JSON.stringify(roleBy)); } catch (_) { /* not kept */ }
+            fewCache.clear();
             setOut(tid, [...ids]);
-          });
+          };
+          box.addEventListener('change', () => apply(false, box.checked ? '' : 'spy'));
+          spyBox.addEventListener('change', () => apply(!spyBox.checked, 'spy'));
           const c0 = el('td');
           c0.appendChild(box);
-          row.append(c0, el('td', '', a.name), el('td', '', a.level ?? '?'), el('td', '', a.off != null ? short(a.off) : '?'),
+          const c1 = el('td');
+          c1.appendChild(spyBox);
+          row.append(c0, c1, el('td', '', a.name), el('td', '', a.level ?? '?'), el('td', '', a.off != null ? short(a.off) : '?'),
             el('td', '', a.ratio ? `×${a.ratio.toFixed(2)}` : '?'),
             el('td', a.beats ? 'is-win' : a.beats === false ? 'is-loss' : '', a.beats == null ? '?' : a.beats ? (a.sure ? '✓' : '✓?') : '✗'),
             el('td', '', `${a.attacks}${a.day.attacks ? ` (${a.day.attacks} used, all back ${new Date(a.back).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })})` : ''}${a.turns != null && a.turns < MASS_TURNS * MASS_ATTACKS ? ` · ${a.turns} turns` : ''}`),
             el('td', a.spyOk ? 'is-win' : '', a.spyOk == null ? '?' : a.spyOk ? `${a.canAssassinate ? '🗡️' : '·'}${a.canSabotage ? '💥' : '·'}` : '✗'));
-          // What they do in this mass: everything, attacks only, spy ops only, the sabotage only.
-          const does = el('select', 'rqum-mass__role');
-          for (const [v, label] of ROLES) {
-            const o = el('option', '', label);
-            o.value = v;
-            o.selected = a.role === v;
-            does.appendChild(o);
-          }
-          does.title = `What ${a.name} does in this mass (the orders and figures follow)`;
-          does.disabled = a.out;
-          does.addEventListener('click', (e) => e.stopPropagation());
-          does.addEventListener('change', () => setRole(tid, a.id, does.value));
-          const c8 = el('td');
-          c8.appendChild(does);
-          row.appendChild(c8);
           b2.appendChild(row);
         }
         cell.appendChild(t2);
