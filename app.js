@@ -600,7 +600,7 @@
     let masses;
     let taken;
     let me;
-    try { [tgo, clan, war, masses, taken, me] = await Promise.all([call('rqum_clan', { p_clan: 'TGO' }), call('rqum_alliance'), call('rqum_war_clan').catch(() => []), call('rqum_masses').catch(() => null), call('rqum_masses_taken').catch(() => null), rpc('rqum_me').catch(() => null)]); } catch (err) {
+    try { [tgo, clan, war, masses, taken, me] = await Promise.all([call('rqum_mass_targets'), call('rqum_alliance'), call('rqum_war_clan').catch(() => []), call('rqum_masses').catch(() => null), call('rqum_masses_taken').catch(() => null), rpc('rqum_me').catch(() => null)]); } catch (err) {
       body.replaceChildren(el('p', 'rqum-muted', err.message));
       return;
     }
@@ -617,7 +617,8 @@
       pick,
       massStart: (id, name, plan) => call('rqum_mass_start', { p_target_id: Number(id), p_name: name || null, p_plan: plan || null }),
       massCancel: (id) => call('rqum_mass_cancel', { p_id: Number(id) }),
-      massDone: (id) => call('rqum_mass_done', { p_id: Number(id) }),
+      massRepost: (id) => call('rqum_mass_repost', { p_id: Number(id) }),
+      massDone: (id, absent) => call('rqum_mass_done', { p_id: Number(id), p_absent: absent?.length ? absent : null }),
       // 📅 Schedule mass: leaders only here (the admin key is only in the extension).
       massSchedule: me?.officer ? (id, name, at, plan) => call('rqum_mass_schedule', { p_target_id: Number(id), p_name: name || null, p_at: at, p_plan: plan }) : null,
       reload: () => renderMassTab(body),
@@ -648,7 +649,13 @@
     // Members open from some gold (their ⚙ Settings in the extension), me left out.
     const [shared, players, me] = await Promise.all(['rqum_member_settings', 'rqum_alliance', 'rqum_me'].map((fn) => rpc(fn).catch(() => null)));
     body.replaceChildren(RQUM.ffaView(rows || [], {
-      open: shared && players ? RQUM.ffaOpenRows(shared.attack_gold, players, { name: me?.name }) : [],
+      open: shared && players ? RQUM.ffaOpenRows(shared.attack_gold, players, { name: me?.name }, shared.attack_set_by) : [],
+      // Leaders add or remove a member themselves.
+      players: players || [],
+      setFor: me?.officer ? async (playerId, gold, gpt) => {
+        try { await call('rqum_ffa_set_for', { p_player_id: Number(playerId), p_gold: gold, p_gpt: gpt }); return { ok: true }; }
+        catch (err) { return { ok: false, error: err.message }; }
+      } : null,
       // No id nor name needed: the database takes the personal key's owner.
       set: async (hours, minGold) => {
         try { await call('rqum_ffa_set', { p_player_id: null, p_name: null, p_hours: hours, p_min_gold: minGold || 0 }); return { ok: true }; }

@@ -407,7 +407,6 @@
     [/^(total\s*)?gold\s*lo(st|ss)$/i, 'gold_lost'],
     [/^units\s*lost$/i, 'units_lost'],
     [/^units\s*killed$/i, 'units_killed'],
-    [/^k\s*\/?\s*d(\s*ratio)?\s*:?$/i, 'kd_ratio'],
   ];
   // Boxes about another player, or not from the game.
   const NOT_MINE = `${FOREIGN}, .player-profile-page, .intel-report-page, .battle-report, table, .rqum-panel`;
@@ -461,6 +460,9 @@
         read(txt(box.querySelector(labelSel)), box.querySelector(valueSel));
       });
     }
+    // K/D: never read as shown (some pages show another K/D, a period's or a battle's, which
+    // was taken for the overall one); units killed ÷ units lost of the Casualty Summary.
+    if (stats.units_killed >= 0 && stats.units_lost > 0) stats.kd_ratio = Math.round(stats.units_killed / stats.units_lost * 100) / 100;
     // Dashboard's Fort Status: "100%".
     const fort = doc.querySelector('.fort-status-display [data-dash-pct]');
     const fortPct = fort && !fort.closest(NOT_MINE) ? parseValue(txt(fort).replace('%', '')) : null;
@@ -498,6 +500,22 @@
       const pct = txt(card.querySelector('.bld-now .bld-effect-final')).match(/\+\s*(\d+(?:\.\d+)?)\s*%\s*fort damage/i);
       if (k === 'siege_workshop') stats.siege_bonus = pct ? Number(pct[1]) : 0;
     });
+    // My Proficiency page (/game/stats): my points, and those not spent ("Available") ->
+    // stats.proficiency { str, con, dex, vig, wlt, cha, free } (the database keeps it as
+    // former_proficiency, the card's 🏅 line, instead of the one worked out from a spy report).
+    const PROF = { strength: 'str', constitution: 'con', dexterity: 'dex', vigilance: 'vig', wealth: 'wlt', charisma: 'cha' };
+    const prof = {};
+    doc.querySelectorAll('.bonuses-grid .bonus-card').forEach((card) => {
+      if (card.closest(NOT_MINE)) return;
+      const k = PROF[txt(card.querySelector('.bonus-card-title')).toLowerCase()];
+      const v = Number(txt(card.querySelector('.bonus-card-value')).replace(/[^\d]/g, ''));
+      if (k && txt(card.querySelector('.bonus-card-value')) && Number.isFinite(v)) prof[k] = v;
+    });
+    if (Object.keys(prof).length === 6 && !('proficiency' in stats)) {
+      const free = [...doc.querySelectorAll('.summary-stat')].find((s) => /^available$/i.test(txt(s.querySelector('.summary-label'))));
+      const n = Number(txt(free).replace(/[^\d]/g, ''));
+      stats.proficiency = { ...prof, free: Number.isFinite(n) ? n : 0 };
+    }
     // My own profile: level, gold, army, population, clan.
     if (playerIdFromUrl(loc.pathname) === me) {
       for (const [k, v] of Object.entries(fromProfile(doc, loc)[0]?.stats || {})) if (!(k in stats)) stats[k] = v;

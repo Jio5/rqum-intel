@@ -241,6 +241,8 @@
 .rqum-renamed { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 3px; background: rgba(249, 115, 22, 0.18);
   color: #fb923c; font-size: 11px; font-weight: 600; white-space: nowrap; vertical-align: 1px; cursor: help; }
 .rqum-card > .rqum-renamed { margin: 2px 0 4px; }
+/* On the card: a ✏️ alone, what changed on hover or tap. */
+.rqum-renamed.is-compact { margin-left: 4px; padding: 0 3px; font-size: 10px; }
 .rqum-list__detail a, .rqum-panel__link { color: var(--color-gold, #d4af37); font-size: 11px; }
 .rqum-panel__link { display: inline-block; margin-top: 8px; }
 
@@ -579,6 +581,8 @@ tr[data-rqum-filtered] { display: none !important; }
 .rqum-officer-toggle.is-on { color: var(--color-gold, #d4af37); }
 .rqum-ffa__who { width: 110px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; padding: 2px 4px; font: inherit; }
 .rqum-ffa__who option { color: #111; }
+.rqum-ffa__add { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px; }
+.rqum-ffa__add .rqum-btn { width: auto; margin: 0 0 0 4px; padding: 2px 10px; }
 /* Admin tab: the personal keys fold in the small window (panel.js renderKeysSection). */
 .rqum-keys__title { cursor: pointer; list-style: none; }
 .rqum-keys__title::-webkit-details-marker { display: none; }
@@ -653,6 +657,10 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-panel__tabs .rqum-panel__tab { flex: 1 0 18%; }
 .rqum-card__identity { margin: 2px 0 6px; font-size: 12px; color: var(--color-text, #e8e8e8); }
 .rqum-card__bonus { color: var(--color-text-muted, #9a9aa0); }
+/* Proficiency points, under race and class. */
+.rqum-card__prof { margin: -4px 0 6px; font-size: 11px; color: var(--color-text, #e8e8e8); cursor: help; }
+.rqum-card__prof-pt { white-space: nowrap; }
+.rqum-card__prof-pt.is-unknown { color: var(--color-text-muted, #9a9aa0); }
 /* "To the last tier" and "units against their gear" chips (Training, Armory, Battle Upgrades):
    one look, grey labels, the figures in colour. */
 .rqum-tier-chip, .rqum-gear-chip { display: inline-block; margin-left: 8px; padding: 2px 9px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 6px;
@@ -664,6 +672,14 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 .rqum-gear-chip .is-ok { color: #22c55e; }
 .rqum-gear-chip .is-missing { color: #ef4444; }
 .rqum-gear-chip .is-extra { color: #f59e0b; }
+/* Stats per gold on each line (Training, Armory, Battle Upgrades): the best of its table in gold. */
+.rqum-ratio { display: inline-block; margin-left: 6px; padding: 1px 6px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 5px;
+  background: rgba(255, 255, 255, .04); color: var(--color-text-muted, #9a9aa0); font: 500 11px/1.5 system-ui, sans-serif;
+  letter-spacing: 0; text-transform: none; vertical-align: middle; white-space: nowrap; cursor: help; }
+.rqum-ratio.is-best { color: var(--color-gold, #d4af37); border-color: var(--color-gold, #d4af37); font-weight: 700; }
+.rqum-ratio.is-locked { opacity: .55; }
+/* Under the price (Training, Battle Upgrades). */
+.rqum-ratio.is-under { display: block; width: fit-content; margin: 4px 0 0; }
 /* Stats tab: "👤 Me ▾" menu (a member's figures), styled as the sub-tab buttons. */
 .rqum-war__who { flex: 1 1 30%; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15); background: var(--color-bg-card, #1b1b1f); color: inherit; font: inherit; font-size: 12px; cursor: pointer; text-align: center; }
 .rqum-war__who.is-active { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); }
@@ -680,8 +696,16 @@ details.rqum-keys[open] > .rqum-keys__title::before { content: '▾ '; }
 /* Narrow screens (phones): three tiles a line, a short last line stretched too. */
 @media (max-width: 900px) {
   .rqum-dash-row { flex-wrap: wrap; }
-  .rqum-dash-row > div { flex: 1 1 30% !important; min-width: 96px !important; }
+  /* As wide as their figure needs ("1.50K / 1.30K | 1.15" whole, never cut by "…"), at least
+     about a third of the line. */
+  .rqum-dash-row > div { flex: 1 1 30% !important; min-width: max-content !important; }
+  .rqum-dash-row > div strong { overflow: visible !important; text-overflow: clip !important; }
+  .rqum-dash-row > div > span { min-width: auto !important; }
 }
+/* Touch screens: a tooltip (title) in a small floating box, sized to its text (common.js). */
+.rqum-tip { position: fixed; z-index: 2147483647; max-width: min(92vw, 380px); padding: 8px 10px; border: 1px solid var(--color-gold, #d4af37);
+  border-radius: 8px; background: rgba(20, 20, 24, .97); color: #e8e8e8; font: 12px/1.45 system-ui, sans-serif; white-space: pre-line;
+  overflow-wrap: anywhere; box-shadow: 0 6px 24px rgba(0, 0, 0, .55); pointer-events: none; }
 /* "Vote 4 DTG" in the top bar (vote.js). */
 .player-stats-bar .rqum-vote-in-bar { text-decoration: none; }
 /* The Dashboard's Attack List (dash-attack.js), as DarkThrone Enhancer's: one grid line per player. */
@@ -979,7 +1003,12 @@ table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 
 .rqum-mass__views button.is-active { border-color: var(--color-gold, #d4af37); color: var(--color-gold, #d4af37); background: color-mix(in srgb, var(--color-gold, #d4af37) 8%, transparent); }
 .rqum-mass__reports { margin: 0 0 10px; padding: 4px 8px; font-size: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 6px; }
 .rqum-mass__reports > summary { cursor: pointer; font-weight: 600; color: var(--rqum-accent, #d4a24c); }
-.rqum-mass__running { display: flex; align-items: center; gap: 6px; margin: 6px 0; padding: 4px 8px; background: rgba(245,158,11,.1); border-left: 3px solid #f59e0b; border-radius: 4px; }
+.rqum-mass__running { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; padding: 4px 8px; background: rgba(245,158,11,.1); border-left: 3px solid #f59e0b; border-radius: 4px; }
+.rqum-range__as { display: block; margin: 0 0 8px; }
+.rqum-range__as select { margin-left: 4px; }
+.rqum-mass__copy { display: inline-block; margin: 2px 0 6px; }
+.rqum-mass__who {flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 0 2px; }
+.rqum-mass__who-one { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; }
 .rqum-mass__report { margin: 6px 0; padding: 4px 8px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 6px; }
 .rqum-mass__report > summary { cursor: pointer; }
 .rqum-mass__report-when { margin: 6px 0 4px; }
@@ -1066,3 +1095,19 @@ table.rqum-bt .rqum-bt__net th, table.rqum-bt .rqum-bt__net td { border-bottom: 
 .rqum-fresh__chip { padding: 0 5px; border: 1px solid rgba(255,255,255,.1); border-radius: 4px; white-space: nowrap; cursor: help; }
 .rqum-fresh__chip.is-late { color: #f59e0b; border-color: rgba(245,158,11,.4); }
 .rqum-fresh__chip.is-old { color: #ef4444; border-color: rgba(239,68,68,.4); }
+/* Threats tab (common.js, RQUM.threatsView). */
+.rqum-threats__table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 8px; }
+.rqum-threats__table th { text-align: left; color: #9aa0b5; font-weight: 600; padding: 3px 4px; border-bottom: 1px solid rgba(255,255,255,.1); cursor: help; }
+.rqum-threats__table td { padding: 3px 4px; border-bottom: 1px solid rgba(255,255,255,.05); white-space: nowrap; }
+.rqum-threats__table tr.is-threat td:first-child { color: #ef4444; }
+.rqum-threats__table td.is-win { color: #ef4444; font-weight: 600; }
+.rqum-threats__table td.is-full { color: #22c55e; }
+.rqum-threats__table .is-gain { color: #22c55e; }
+.rqum-threats__table .is-loss { color: #ef4444; }
+.rqum-threats__total { margin: 2px 0 4px; font-size: 12px; color: var(--color-gold, #d4af37); }
+/* Admin tab: options in use (panel.js, renderPrefsSection). */
+.rqum-prefs td:first-child { white-space: normal; }
+.rqum-prefs td.is-low { color: #f59e0b; }
+.rqum-prefs__bar { width: 60px; }
+.rqum-prefs__bar span { display: block; height: 6px; border-radius: 3px; background: #d4af37; }
+.rqum-prefs th { padding-top: 8px; }
